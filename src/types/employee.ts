@@ -1,3 +1,5 @@
+import type { UserRole } from "./user";
+
 export type EmployeeStatus = "active" | "inactive";
 
 export interface Employee {
@@ -10,8 +12,7 @@ export interface Employee {
   departmentId: number | null;
   designation: string;
   designationId: number | null;
-  managerId: string | null;
-  managerName: string | null;
+  role: UserRole;
   joinDate: string;
   status: EmployeeStatus;
   isManager: boolean;
@@ -24,7 +25,7 @@ export interface EmployeeFormInput {
   phone: string;
   departmentId: number | null;
   designationId: number | null;
-  managerId: string | null;
+  role: UserRole;
   joinDate: string;
   status: EmployeeStatus;
   avatarFile: File | null;

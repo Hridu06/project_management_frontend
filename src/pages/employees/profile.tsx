@@ -23,6 +23,13 @@ import type { Employee } from "../../types/employee";
 import type { Project } from "../../types/project";
 import type { AttendanceRecord, AttendanceStatus, Contribution } from "../../types/attendance";
 import type { LeaveRequest, LeaveStatus } from "../../types/leave";
+import type { UserRole } from "../../types/user";
+
+const roleLabels: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  employee: "Employee",
+};
 
 const attendanceStatusStyles: Record<AttendanceStatus, string> = {
   present: "bg-emerald-50 text-emerald-600",
@@ -173,7 +180,7 @@ const EmployeeProfile = () => {
       phone: personalForm.phone,
       departmentId: employee.departmentId,
       designationId: employee.designationId,
-      managerId: employee.managerId,
+      role: employee.role,
       joinDate: employee.joinDate,
       status: employee.status,
       avatarFile: null,
@@ -244,7 +251,7 @@ const EmployeeProfile = () => {
                 {employee.designation} · {employee.department}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Manager: {employee.managerName ?? "Unassigned"} · Joined {employee.joinDate}
+                Role: {roleLabels[employee.role]} · Joined {employee.joinDate}
               </p>
             </div>
           </div>
@@ -430,10 +437,10 @@ const EmployeeProfile = () => {
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Manager
+                Role
               </dt>
               <dd className="mt-1 text-sm text-slate-700">
-                {employee.managerName ?? "Unassigned"}
+                {roleLabels[employee.role]}
               </dd>
             </div>
             <div>

@@ -1,5 +1,10 @@
 import { apiRequest } from "./api";
-import type { Team, TeamFormInput, TeamMember } from "../types/team";
+import type {
+  Team,
+  TeamAssignableUser,
+  TeamFormInput,
+  TeamMember,
+} from "../types/team";
 
 interface ApiTeam {
   id: number;
@@ -43,6 +48,13 @@ const toRequestBody = (input: TeamFormInput) => ({
 export const getTeamList = async (): Promise<Team[]> => {
   const data = await apiRequest<TeamListResponse>("/teams");
   return data.teams.map(toTeam);
+};
+
+export const getAssignableUsers = async (): Promise<TeamAssignableUser[]> => {
+  const data = await apiRequest<{ users: TeamAssignableUser[] }>(
+    "/teams/assignable-users",
+  );
+  return data.users;
 };
 
 export const createTeam = async (input: TeamFormInput): Promise<Team> => {

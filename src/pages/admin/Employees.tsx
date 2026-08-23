@@ -8,13 +8,18 @@ import {
   getEmployees,
   updateEmployee,
 } from "../../services/employeeService";
-import { getUsers } from "../../services/userService";
 import { getDepartmentList } from "../../services/departmentService";
 import { getDesignationList } from "../../services/designationService";
 import type { Employee, EmployeeFormInput } from "../../types/employee";
-import type { User } from "../../types/user";
+import type { UserRole } from "../../types/user";
 import type { Department } from "../../types/department";
 import type { Designation } from "../../types/designation";
+
+const roleLabels: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  employee: "Employee",
+};
 
 const emptyForm: EmployeeFormInput = {
   name: "",
@@ -22,7 +27,7 @@ const emptyForm: EmployeeFormInput = {
   phone: "",
   departmentId: null,
   designationId: null,
-  managerId: null,
+  role: "employee",
   joinDate: new Date().toISOString().slice(0, 10),
   status: "active",
   avatarFile: null,
@@ -30,7 +35,6 @@ const emptyForm: EmployeeFormInput = {
 
 const Employees = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [managerOptions, setManagerOptions] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,16 +48,14 @@ const Employees = () => {
 
   useEffect(() => {
     const load = async () => {
-      const [employeeList, managerList, departmentList, designationList] =
+      const [employeeList, departmentList, designationList] =
         await Promise.all([
           getEmployees(),
-          getUsers({ role: "manager" }),
           getDepartmentList(),
           getDesignationList(),
         ]);
 
       setEmployees(employeeList);
-      setManagerOptions(managerList);
       setDepartments(departmentList);
       setDesignations(designationList);
       setLoading(false);
@@ -90,7 +92,7 @@ const Employees = () => {
       phone: employee.phone,
       departmentId: employee.departmentId,
       designationId: employee.designationId,
-      managerId: employee.managerId,
+      role: employee.role,
       joinDate: employee.joinDate,
       status: employee.status,
       avatarFile: null,
@@ -141,7 +143,7 @@ const Employees = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Employees</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage employee records, profiles and manager assignments.
+            Manage employee records, profiles and roles.
           </p>
         </div>
 
@@ -187,7 +189,7 @@ const Employees = () => {
                   Designation
                 </th>
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Manager
+                  Role
                 </th>
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
@@ -255,9 +257,7 @@ const Employees = () => {
                     </td>
 
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {employee.managerName ?? (
-                        <span className="text-slate-400">Unassigned</span>
-                      )}
+                      {roleLabels[employee.role]}
                     </td>
 
                     <td className="px-6 py-4">
@@ -431,24 +431,21 @@ const Employees = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Manager
+                Role
               </label>
               <select
-                value={form.managerId ?? ""}
+                value={form.role}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    managerId: event.target.value || null,
+                    role: event.target.value as UserRole,
                   }))
                 }
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               >
-                <option value="">Unassigned</option>
-                {managerOptions.map((manager) => (
-                  <option key={manager.id} value={manager.id}>
-                    {manager.name}
-                  </option>
-                ))}
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
 

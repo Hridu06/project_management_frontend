@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import type { Employee, EmployeeFormInput } from "../types/employee";
+import type { UserRole } from "../types/user";
 
 interface ApiEmployee {
   id: number;
@@ -9,7 +10,7 @@ interface ApiEmployee {
   avatar: string | null;
   department: { id: number; name: string } | null;
   designation: { id: number; name: string } | null;
-  manager: { id: number; name: string } | null;
+  role: UserRole | null;
   has_user_account: boolean;
   joining_date: string | null;
   status: Employee["status"];
@@ -46,8 +47,7 @@ const toEmployee = (data: ApiEmployee): Employee => ({
   departmentId: data.department?.id ?? null,
   designation: data.designation?.name ?? "",
   designationId: data.designation?.id ?? null,
-  managerId: data.manager ? String(data.manager.id) : null,
-  managerName: data.manager?.name ?? null,
+  role: data.role ?? "employee",
   joinDate: data.joining_date ?? "",
   status: data.status,
   isManager: data.is_manager,
@@ -63,7 +63,7 @@ const toFormData = (input: EmployeeFormInput): FormData => {
     formData.append("department_id", String(input.departmentId));
   if (input.designationId !== null)
     formData.append("designation_id", String(input.designationId));
-  if (input.managerId !== null) formData.append("manager_id", input.managerId);
+  formData.append("role", input.role);
   if (input.joinDate) formData.append("joining_date", input.joinDate);
   formData.append("status", input.status);
   if (input.avatarFile) formData.append("avatar", input.avatarFile);

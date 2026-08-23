@@ -1,4 +1,12 @@
+import type { UserRole } from "./user";
+
 export type TeamMemberRole = "team_leader" | "manager" | "employee";
+
+export interface TeamAssignableUser {
+  id: number;
+  name: string;
+  role: UserRole;
+}
 
 export interface TeamMember {
   id: number;

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   ChevronDown,
+  KeyRound,
   LogOut,
   Menu,
   Moon,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
+import ChangePasswordModal from "../common/ChangePasswordModal";
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   dashboard: {
@@ -69,6 +71,7 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -176,7 +179,19 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 sm:mt-2 w-36 sm:w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-50 mt-1 sm:mt-2 w-44 sm:w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setPasswordModalOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                >
+                  <KeyRound size={14} className="sm:w-4 sm:h-4" />
+                  Change Password
+                </button>
+
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -190,6 +205,11 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
           </div>
         </div>
       </div>
+
+      <ChangePasswordModal
+        open={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+      />
     </header>
   );
 };

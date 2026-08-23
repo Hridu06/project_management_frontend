@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Pencil, Plus, Search, Trash2, Users2 } from "lucide-react";
+import { Eye, Pencil, Plus, Search, Trash2, Users2 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
   createTeam,
   deleteTeam,
+  getAssignableUsers,
   getTeamList,
   updateTeam,
 } from "../../services/teamService";
-import { getUsers } from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
-import type { Team, TeamFormInput, TeamMemberRole } from "../../types/team";
-import type { User } from "../../types/user";
+import type {
+  Team,
+  TeamAssignableUser,
+  TeamFormInput,
+  TeamMemberRole,
+} from "../../types/team";
 
 const emptyForm: TeamFormInput = {
   name: "",
@@ -32,10 +36,14 @@ const memberRoleOptions: TeamMemberRole[] = ["team_leader", "employee"];
 const Teams = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
+  // Managers can create and edit teams alongside admins; deleting stays
+  // admin-only.
+  const canManageTeams = isAdmin || isManager;
 
   const [teams, setTeams] = useState<Team[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [managers, setManagers] = useState<User[]>([]);
+  const [users, setUsers] = useState<TeamAssignableUser[]>([]);
+  const [managers, setManagers] = useState<TeamAssignableUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -45,30 +53,33 @@ const Teams = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [viewingTeam, setViewingTeam] = useState<Team | null>(null);
+
   useEffect(() => {
     const load = async () => {
-      // Non-admins only get the read-only team list — /users is admin-only,
-      // so skip it entirely rather than eating an avoidable 403.
-      if (!isAdmin) {
+      // Employees only get the read-only team list — /teams/assignable-users
+      // is admin/manager-only, so skip it entirely rather than eating an
+      // avoidable 403.
+      if (!canManageTeams) {
         setTeams(await getTeamList());
         setLoading(false);
         return;
       }
 
-      const [teamList, userList, managerList] = await Promise.all([
+      const [teamList, assignableUsers] = await Promise.all([
         getTeamList(),
-        getUsers(),
-        getUsers({ role: "manager" }),
+        getAssignableUsers(),
       ]);
 
       setTeams(teamList);
-      setUsers(userList);
-      setManagers(managerList);
+      setUsers(assignableUsers);
+      setManagers(assignableUsers.filter((item) => item.role === "manager"));
       setLoading(false);
     };
 
     load();
-  }, [isAdmin]);
+  }, [canManageTeams]);
 
   const filteredTeams = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -83,6 +94,11 @@ const Teams = () => {
     setForm(emptyForm);
     setError(null);
     setModalOpen(true);
+  };
+
+  const openViewModal = (team: Team) => {
+    setViewingTeam(team);
+    setViewModalOpen(true);
   };
 
   const openEditModal = (team: Team) => {
@@ -159,13 +175,13 @@ const Teams = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Teams</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {isAdmin
+            {canManageTeams
               ? "Create teams and assign managers and members."
               : "Teams you're part of and their members."}
           </p>
         </div>
 
-        {isAdmin && (
+        {canManageTeams && (
           <button
             type="button"
             onClick={openCreateModal}
@@ -211,18 +227,16 @@ const Teams = () => {
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Team Size
                 </th>
-                {isAdmin && (
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
-                )}
+                <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={isAdmin ? 5 : 4} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-slate-400">
                     Loading teams...
                   </td>
                 </tr>
@@ -230,7 +244,7 @@ const Teams = () => {
 
               {!loading && filteredTeams.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 5 : 4} className="px-6 py-14">
+                  <td colSpan={5} className="px-6 py-14">
                     <div className="flex flex-col items-center gap-2 text-center">
                       <Users2 size={22} className="text-slate-300" />
                       <p className="text-sm font-medium text-slate-500">
@@ -283,9 +297,18 @@ const Teams = () => {
                       {team.member_count === 1 ? "" : "s"}
                     </td>
 
-                    {isAdmin && (
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-1">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openViewModal(team)}
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                          aria-label={`View ${team.name}`}
+                        >
+                          <Eye size={16} />
+                        </button>
+
+                        {canManageTeams && (
                           <button
                             type="button"
                             onClick={() => openEditModal(team)}
@@ -294,7 +317,9 @@ const Teams = () => {
                           >
                             <Pencil size={16} />
                           </button>
+                        )}
 
+                        {isAdmin && (
                           <button
                             type="button"
                             onClick={() => handleDelete(team)}
@@ -303,9 +328,9 @@ const Teams = () => {
                           >
                             <Trash2 size={16} />
                           </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
             </tbody>
@@ -458,6 +483,95 @@ const Teams = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* View Modal */}
+      <Modal
+        open={viewModalOpen}
+        onClose={() => setViewModalOpen(false)}
+        title="Team Details"
+      >
+        {viewingTeam && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-base font-semibold text-blue-600">
+                {viewingTeam.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-base font-semibold text-slate-900">
+                  {viewingTeam.name}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {viewingTeam.member_count} member
+                  {viewingTeam.member_count === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+
+            {viewingTeam.description && (
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Description
+                </p>
+                <p className="text-sm text-slate-700">
+                  {viewingTeam.description}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Manager
+              </p>
+              <p className="text-sm text-slate-700">
+                {viewingTeam.managerName ?? (
+                  <span className="text-slate-400">Unassigned</span>
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Members
+              </p>
+
+              {viewingTeam.members.length === 0 ? (
+                <p className="text-sm text-slate-400">No members yet</p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                  {viewingTeam.members.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-slate-700">
+                          {member.name}
+                        </p>
+                        <p className="truncate text-xs text-slate-400">
+                          {member.email}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                        {roleLabels[member.role]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setViewModalOpen(false)}
+                className="rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

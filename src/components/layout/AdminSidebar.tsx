@@ -66,8 +66,8 @@ const navGroups: NavGroup[] = [
     label: "Management",
     items: [
       { to: "/app/employees", label: "Employees", icon: Users, roles: ["admin"] },
-      { to: "/app/managers", label: "Manager", icon: UserCheck, roles: ["admin"] },
-      { to: "/app/users", label: "Users", icon: UserCog, roles: ["admin"] },
+      // { to: "/app/managers", label: "Manager", icon: UserCheck, roles: ["admin"] },
+      // { to: "/app/users", label: "Users", icon: UserCog, roles: ["admin"] },
       { to: "/app/teams", label: "Teams", icon: Users2 },
       {
         to: "/app/projects",

@@ -37,6 +37,7 @@ import {
 } from "../../services/contributionService";
 import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
 import type { Employee } from "../../types/employee";
+import type { UserRole } from "../../types/user";
 import type {
   Contribution,
   ContributionPriority,
@@ -48,6 +49,12 @@ const statusStyles: Record<ProjectStatus, string> = {
   active: "bg-emerald-50 text-emerald-600",
   "on-hold": "bg-amber-50 text-amber-600",
   completed: "bg-slate-100 text-slate-500",
+};
+
+const roleLabels: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  employee: "Employee",
 };
 
 const statusLabels: Record<ProjectStatus, string> = {
@@ -698,7 +705,7 @@ const ProjectDetail = () => {
                             {employee.name}
                             <span className="text-xs text-slate-400">
                               {" "}
-                              · Manager: {employee.managerName ?? "Unassigned"}
+                              · Role: {roleLabels[employee.role]}
                             </span>
                           </span>
                           {summary && (

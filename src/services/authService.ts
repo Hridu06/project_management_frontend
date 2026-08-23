@@ -53,3 +53,17 @@ export const logout = async (): Promise<void> => {
 };
 
 export const fetchCurrentUser = (): Promise<ApiUser> => apiRequest<ApiUser>("/user");
+
+export const changePassword = (
+  currentPassword: string,
+  password: string,
+  passwordConfirmation: string,
+): Promise<void> =>
+  apiRequest("/auth/change-password", {
+    method: "POST",
+    body: {
+      current_password: currentPassword,
+      password,
+      password_confirmation: passwordConfirmation,
+    },
+  });

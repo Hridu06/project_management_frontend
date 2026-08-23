@@ -21,6 +21,13 @@ import { getProjects } from "../../services/projectService";
 import { getAttendanceRecords, formatDuration } from "../../services/attendanceService";
 import { getLeaveRequests, countLeaveDays } from "../../services/leaveService";
 import type { Employee } from "../../types/employee";
+import type { UserRole } from "../../types/user";
+
+const roleLabels: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  employee: "Employee",
+};
 
 const EmployeeMyProfile = () => {
   const { user } = useAuth();
@@ -186,7 +193,7 @@ const EmployeeMyProfile = () => {
                 {employee.designation} · {employee.department}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Manager: {employee.managerName ?? "Unassigned"} · Joined {employee.joinDate}
+                Role: {roleLabels[employee.role]} · Joined {employee.joinDate}
               </p>
             </div>
           </div>
@@ -383,10 +390,10 @@ const EmployeeMyProfile = () => {
             <div>
               <dt className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 <UserCircle size={12} />
-                Manager
+                Role
               </dt>
               <dd className="mt-1 text-sm text-slate-700">
-                {employee.managerName ?? "Unassigned"}
+                {roleLabels[employee.role]}
               </dd>
             </div>
             <div>

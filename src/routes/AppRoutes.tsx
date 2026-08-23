@@ -51,8 +51,9 @@ const AppRoutes = () => {
           <Route path="/app" element={<AdminLayout />}>
             <Route index element={<AdminHomeRedirect />} />
 
-            {/* Read-only for every role; write actions are hidden/blocked
-                for non-admins inside the page itself and enforced server-side. */}
+            {/* Read-only for employees; admins and managers can also create
+                and edit teams (delete stays admin-only). Write actions are
+                hidden/blocked inside the page itself and enforced server-side. */}
             <Route path="teams" element={<Teams />} />
 
             {/* Employee-only */}
