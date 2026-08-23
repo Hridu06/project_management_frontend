@@ -29,8 +29,9 @@ import type { LeaveRequest } from "../../types/leave";
 
 const projectStatusStyles: Record<ProjectStatus, string> = {
   active: "bg-emerald-50 text-emerald-600",
-  "on-hold": "bg-amber-50 text-amber-600",
+  on_hold: "bg-amber-50 text-amber-600",
   completed: "bg-slate-100 text-slate-500",
+  archived: "bg-slate-100 text-slate-400",
 };
 
 const contributionStatusStyles: Record<
@@ -54,6 +55,7 @@ const durationMinutes = (contribution: Contribution) => {
 const EmployeeDashboard = () => {
   const { user } = useAuth();
   const employeeId = user?.employeeId != null ? String(user.employeeId) : null;
+  const userEmail = user?.email ?? null;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
@@ -93,12 +95,17 @@ const EmployeeDashboard = () => {
     };
   }, []);
 
+  // Project membership comes from the linked team's members (Users), matched
+  // back to the signed-in employee by email — projects and users aren't
+  // directly linked on the frontend.
   const myProjects = useMemo(
     () =>
-      employeeId
-        ? projects.filter((project) => project.employeeIds.includes(employeeId))
+      userEmail
+        ? projects.filter((project) =>
+            project.members.some((member) => member.email === userEmail),
+          )
         : [],
-    [projects, employeeId],
+    [projects, userEmail],
   );
 
   const myContributions = useMemo(
@@ -248,7 +255,7 @@ const EmployeeDashboard = () => {
                     </span>
                   </div>
                   <span className="ml-2 shrink-0 text-sm font-semibold text-slate-900">
-                    {projectHours(project.id)}
+                    {projectHours(String(project.id))}
                   </span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -332,7 +339,9 @@ const EmployeeDashboard = () => {
               )}
 
               {myContributions.slice(0, 8).map((contribution) => {
-                const project = projects.find((item) => item.id === contribution.projectId);
+                const project = projects.find(
+                  (item) => String(item.id) === contribution.projectId,
+                );
                 const style = contributionStatusStyles[contribution.status];
 
                 return (

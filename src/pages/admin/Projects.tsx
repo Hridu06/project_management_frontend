@@ -1,13 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-  ChevronDown,
-  FolderKanban,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Eye, FolderKanban, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
   createProject,
@@ -15,9 +8,9 @@ import {
   getProjects,
   updateProject,
 } from "../../services/projectService";
-import { getEmployees } from "../../services/employeeService";
+import { getTeamList } from "../../services/teamService";
 import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
-import type { Employee } from "../../types/employee";
+import type { Team } from "../../types/team";
 
 const emptyForm: ProjectFormInput = {
   name: "",
@@ -27,71 +20,48 @@ const emptyForm: ProjectFormInput = {
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
   progress: 0,
-  employeeIds: [],
+  teamId: null,
 };
 
 const statusStyles: Record<ProjectStatus, string> = {
   active: "bg-emerald-50 text-emerald-600",
-  "on-hold": "bg-amber-50 text-amber-600",
+  on_hold: "bg-amber-50 text-amber-600",
   completed: "bg-slate-100 text-slate-500",
+  archived: "bg-slate-100 text-slate-400",
 };
 
 const statusLabels: Record<ProjectStatus, string> = {
   active: "Active",
-  "on-hold": "On Hold",
+  on_hold: "On Hold",
   completed: "Completed",
+  archived: "Archived",
 };
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ProjectFormInput>(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
-  const employeeMenuRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const load = async () => {
-      const [projectList, employeeList] = await Promise.all([
+      const [projectList, teamList] = await Promise.all([
         getProjects(),
-        getEmployees(),
+        getTeamList(),
       ]);
 
       setProjects(projectList);
-      setEmployees(employeeList);
+      setTeams(teamList);
       setLoading(false);
     };
 
     load();
   }, []);
-
-  useEffect(() => {
-    if (!employeeMenuOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        employeeMenuRef.current &&
-        !employeeMenuRef.current.contains(event.target as Node)
-      ) {
-        setEmployeeMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [employeeMenuOpen]);
-
-  const employeeMap = useMemo(() => {
-    const map = new Map<string, Employee>();
-    for (const employee of employees) map.set(employee.id, employee);
-    return map;
-  }, [employees]);
 
   const filteredProjects = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -101,14 +71,13 @@ const Projects = () => {
     return projects.filter(
       (project) =>
         project.name.toLowerCase().includes(term) ||
-        project.client.toLowerCase().includes(term),
+        (project.client ?? "").toLowerCase().includes(term),
     );
   }, [projects, search]);
 
   const openCreateModal = () => {
     setEditingId(null);
     setForm(emptyForm);
-    setEmployeeMenuOpen(false);
     setModalOpen(true);
   };
 
@@ -116,25 +85,15 @@ const Projects = () => {
     setEditingId(project.id);
     setForm({
       name: project.name,
-      client: project.client,
+      client: project.client ?? "",
       description: project.description,
       status: project.status,
       startDate: project.startDate,
-      endDate: project.endDate,
+      endDate: project.endDate ?? "",
       progress: project.progress,
-      employeeIds: project.employeeIds,
+      teamId: project.teamId,
     });
-    setEmployeeMenuOpen(false);
     setModalOpen(true);
-  };
-
-  const toggleEmployee = (employeeId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      employeeIds: prev.employeeIds.includes(employeeId)
-        ? prev.employeeIds.filter((id) => id !== employeeId)
-        : [...prev.employeeIds, employeeId],
-    }));
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -285,34 +244,21 @@ const Projects = () => {
                     </td>
 
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {project.client}
+                      {project.client || <span className="text-slate-400">—</span>}
                     </td>
 
                     <td className="px-6 py-4">
-                      {project.employeeIds.length === 0 ? (
+                      {project.teamName ? (
+                        <span className="text-sm text-slate-600">
+                          {project.teamName}
+                          <span className="ml-1.5 text-xs text-slate-400">
+                            ({project.members.length})
+                          </span>
+                        </span>
+                      ) : (
                         <span className="text-sm text-slate-400">
                           Unassigned
                         </span>
-                      ) : (
-                        <div className="flex -space-x-2">
-                          {project.employeeIds.slice(0, 4).map((id) => (
-                            <div
-                              key={id}
-                              title={employeeMap.get(id)?.name}
-                              className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-[11px] font-semibold text-white"
-                            >
-                              {(employeeMap.get(id)?.name ?? "?")
-                                .charAt(0)
-                                .toUpperCase()}
-                            </div>
-                          ))}
-
-                          {project.employeeIds.length > 4 && (
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[11px] font-semibold text-slate-600">
-                              +{project.employeeIds.length - 4}
-                            </div>
-                          )}
-                        </div>
                       )}
                     </td>
 
@@ -352,6 +298,14 @@ const Projects = () => {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
+                        <Link
+                          to={`/app/projects/${project.id}`}
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                          aria-label={`View ${project.name}`}
+                        >
+                          <Eye size={16} />
+                        </Link>
+
                         <button
                           type="button"
                           onClick={() => openEditModal(project)}
@@ -472,105 +426,48 @@ const Projects = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {editingId && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Progress ({form.progress}%)
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={form.progress}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      progress: Number(event.target.value),
-                    }))
-                  }
-                  className="w-full accent-blue-600"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Status
-              </label>
-              <select
-                value={form.status}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    status: event.target.value as ProjectStatus,
-                  }))
-                }
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="active">Active</option>
-                <option value="on-hold">On Hold</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Status
+            </label>
+            <select
+              value={form.status}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  status: event.target.value as ProjectStatus,
+                }))
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="active">Active</option>
+              <option value="on_hold">On Hold</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
           </div>
 
-          <div className="relative" ref={employeeMenuRef}>
+          <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Assign Employees
+              Team
             </label>
-
-            <button
-              type="button"
-              onClick={() => setEmployeeMenuOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-300 px-3 py-2 text-left text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            <select
+              value={form.teamId ?? ""}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  teamId: event.target.value ? Number(event.target.value) : null,
+                }))
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
-              <span
-                className={
-                  form.employeeIds.length === 0 ? "text-slate-400" : undefined
-                }
-              >
-                {form.employeeIds.length === 0
-                  ? "Select employees"
-                  : form.employeeIds
-                      .map((id) => employeeMap.get(id)?.name)
-                      .filter(Boolean)
-                      .join(", ")}
-              </span>
-              <ChevronDown
-                size={16}
-                className={`shrink-0 text-slate-400 transition-transform ${employeeMenuOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {employeeMenuOpen && (
-              <div className="absolute z-10 mt-1.5 max-h-48 w-full space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
-                {employees.length === 0 && (
-                  <p className="px-2 py-1.5 text-sm text-slate-400">
-                    No employees available
-                  </p>
-                )}
-
-                {employees.map((employee) => (
-                  <label
-                    key={employee.id}
-                    className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.employeeIds.includes(employee.id)}
-                      onChange={() => toggleEmployee(employee.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    {employee.name}
-                    <span className="text-xs text-slate-400">
-                      {employee.department}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
+              <option value="">No team</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

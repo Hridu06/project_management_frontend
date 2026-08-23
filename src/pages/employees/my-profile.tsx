@@ -67,7 +67,9 @@ const EmployeeMyProfile = () => {
 
         const employeeId = profile.id;
         setAssignedProjectCount(
-          projects.filter((project) => project.employeeIds.includes(employeeId)).length,
+          projects.filter((project) =>
+            project.members.some((member) => member.email === profile.email),
+          ).length,
         );
 
         const myAttendance = attendanceRecords.filter(

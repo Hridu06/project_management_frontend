@@ -1,66 +1,84 @@
-import type { Project, ProjectFormInput } from "../types/project";
+import { apiRequest } from "./api";
+import type { Project, ProjectFormInput, ProjectMember } from "../types/project";
 
-let projects: Project[] = [
-  {
-    id: "p1",
-    name: "DSK Bangladesh",
-    client: "DSK Bangladesh",
-    description: "Employee management and HR platform.",
-    status: "active",
-    startDate: "2024-01-10",
-    endDate: "2024-12-31",
-    progress: 65,
-    employeeIds: ["e1", "e3"],
-  },
-  {
-    id: "p2",
-    name: "HRM System",
-    client: "Internal",
-    description: "Attendance and contribution tracking module.",
-    status: "active",
-    startDate: "2024-03-05",
-    endDate: "2024-09-30",
-    progress: 40,
-    employeeIds: ["e2"],
-  },
-  {
-    id: "p3",
-    name: "Nanosoft Website Revamp",
-    client: "Nanosoft",
-    description: "Marketing website redesign and rebuild.",
-    status: "on-hold",
-    startDate: "2023-09-18",
-    endDate: "2024-06-30",
-    progress: 20,
-    employeeIds: [],
-  },
-];
+interface ApiProject {
+  id: number;
+  name: string;
+  description: string;
+  status: Project["status"];
+  client: string | null;
+  progress: number;
+  start_date: string;
+  end_date: string | null;
+  team: { id: number; name: string; members: ProjectMember[] } | null;
+  owner: { id: number; name: string } | null;
+  created_at: string;
+  updated_at: string;
+}
 
-const delay = <T,>(data: T): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(data), 250));
+interface ProjectListResponse {
+  projects: ApiProject[];
+}
 
-export const getProjects = (): Promise<Project[]> => {
-  return delay([...projects]);
+interface ProjectResponse {
+  message: string;
+  project: ApiProject;
+}
+
+const toProject = (data: ApiProject): Project => ({
+  id: data.id,
+  name: data.name,
+  description: data.description,
+  status: data.status,
+  client: data.client,
+  progress: data.progress,
+  startDate: data.start_date,
+  endDate: data.end_date,
+  teamId: data.team?.id ?? null,
+  teamName: data.team?.name ?? null,
+  members: data.team?.members ?? [],
+  ownerId: data.owner?.id ?? 0,
+  ownerName: data.owner?.name ?? null,
+});
+
+const toRequestBody = (input: ProjectFormInput) => ({
+  name: input.name,
+  description: input.description,
+  status: input.status,
+  client: input.client || null,
+  progress: input.progress,
+  start_date: input.startDate,
+  end_date: input.endDate || null,
+  team_id: input.teamId,
+});
+
+export const getProjects = async (): Promise<Project[]> => {
+  const data = await apiRequest<ProjectListResponse>("/projects");
+  return data.projects.map(toProject);
 };
 
-export const createProject = (input: ProjectFormInput): Promise<Project> => {
-  const project: Project = { id: crypto.randomUUID(), ...input };
-  projects = [project, ...projects];
-  return delay(project);
-};
-
-export const updateProject = (
-  id: string,
+export const createProject = async (
   input: ProjectFormInput,
 ): Promise<Project> => {
-  projects = projects.map((project) =>
-    project.id === id ? { id, ...input } : project,
-  );
+  const data = await apiRequest<ProjectResponse>("/projects", {
+    method: "POST",
+    body: toRequestBody(input),
+  });
 
-  return delay({ id, ...input });
+  return toProject(data.project);
 };
 
-export const deleteProject = (id: string): Promise<void> => {
-  projects = projects.filter((project) => project.id !== id);
-  return delay(undefined);
+export const updateProject = async (
+  id: number,
+  input: ProjectFormInput,
+): Promise<Project> => {
+  const data = await apiRequest<ProjectResponse>(`/projects/${id}`, {
+    method: "PUT",
+    body: toRequestBody(input),
+  });
+
+  return toProject(data.project);
 };
+
+export const deleteProject = (id: number): Promise<void> =>
+  apiRequest(`/projects/${id}`, { method: "DELETE" });

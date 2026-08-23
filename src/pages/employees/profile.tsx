@@ -112,12 +112,16 @@ const EmployeeProfile = () => {
 
   const assignedProjects = useMemo(() => {
     if (!employee) return [];
-    return projects.filter((project) => project.employeeIds.includes(employee.id));
+    return projects.filter((project) =>
+      project.members.some((member) => member.email === employee.email),
+    );
   }, [projects, employee]);
 
   const projectContributions = useMemo(() => {
     return assignedProjects.map((project) => {
-      const items = contributions.filter((item) => item.projectId === project.id);
+      const items = contributions.filter(
+        (item) => item.projectId === String(project.id),
+      );
       const totalMinutes = items.reduce(
         (sum, item) => sum + Math.max(toMinutes(item.endTime) - toMinutes(item.startTime), 0),
         0,

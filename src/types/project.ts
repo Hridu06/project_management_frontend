@@ -1,15 +1,34 @@
-export type ProjectStatus = "active" | "completed" | "on-hold";
+export type ProjectStatus = "active" | "completed" | "on_hold" | "archived";
 
-export interface Project {
-  id: string;
+export interface ProjectMember {
+  id: number;
   name: string;
-  client: string;
-  description: string;
-  status: ProjectStatus;
-  startDate: string;
-  endDate: string;
-  progress: number;
-  employeeIds: string[];
+  email: string;
 }
 
-export type ProjectFormInput = Omit<Project, "id">;
+export interface Project {
+  id: number;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  client: string | null;
+  progress: number;
+  startDate: string;
+  endDate: string | null;
+  teamId: number | null;
+  teamName: string | null;
+  members: ProjectMember[];
+  ownerId: number;
+  ownerName: string | null;
+}
+
+export interface ProjectFormInput {
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  client: string;
+  progress: number;
+  startDate: string;
+  endDate: string;
+  teamId: number | null;
+}

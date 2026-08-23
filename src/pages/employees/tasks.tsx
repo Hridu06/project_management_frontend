@@ -22,8 +22,9 @@ import type {
 
 const projectStatusStyles: Record<ProjectStatus, string> = {
   active: "bg-emerald-50 text-emerald-600",
-  "on-hold": "bg-amber-50 text-amber-600",
+  on_hold: "bg-amber-50 text-amber-600",
   completed: "bg-slate-100 text-slate-500",
+  archived: "bg-slate-100 text-slate-400",
 };
 
 const statusFilters: Array<{ value: "all" | ContributionStatus; label: string }> = [
@@ -128,7 +129,7 @@ const EmployeeTasks = () => {
 
   const myProjects = useMemo(() => {
     const projectIds = new Set(myTasks.map((task) => task.projectId));
-    return projects.filter((project) => projectIds.has(project.id));
+    return projects.filter((project) => projectIds.has(String(project.id)));
   }, [projects, myTasks]);
 
   const filteredTasks = useMemo(() => {
@@ -160,7 +161,7 @@ const EmployeeTasks = () => {
     }
 
     return myProjects
-      .map((project) => ({ project, tasks: map.get(project.id) ?? [] }))
+      .map((project) => ({ project, tasks: map.get(String(project.id)) ?? [] }))
       .filter((group) => group.tasks.length > 0);
   }, [myProjects, filteredTasks]);
 
@@ -277,7 +278,7 @@ const EmployeeTasks = () => {
       {groupedByProject.length > 0 && (
         <div className="space-y-4">
           {groupedByProject.map(({ project, tasks }) => {
-            const isCollapsed = collapsed.has(project.id);
+            const isCollapsed = collapsed.has(String(project.id));
 
             return (
               <div
@@ -286,7 +287,7 @@ const EmployeeTasks = () => {
               >
                 <button
                   type="button"
-                  onClick={() => toggleProject(project.id)}
+                  onClick={() => toggleProject(String(project.id))}
                   className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50"
                 >
                   <div className="flex min-w-0 items-center gap-3">

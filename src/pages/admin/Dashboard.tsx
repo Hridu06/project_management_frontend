@@ -79,7 +79,7 @@ const Dashboard = () => {
   );
 
   const projectMap = useMemo(
-    () => new Map(projects.map((project) => [project.id, project])),
+    () => new Map(projects.map((project) => [String(project.id), project])),
     [projects],
   );
 
@@ -142,7 +142,7 @@ const Dashboard = () => {
   const projectStats = useMemo(() => {
     return activeProjects.map(project => {
       const projectContributions = contributions.filter(
-        c => c.projectId === project.id
+        c => c.projectId === String(project.id)
       );
       
       const uniqueEmployees = new Set(

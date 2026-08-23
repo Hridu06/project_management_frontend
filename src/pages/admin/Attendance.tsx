@@ -59,7 +59,7 @@ const Attendance = () => {
 
   const projectMap = useMemo(() => {
     const map = new Map<string, Project>();
-    for (const project of projects) map.set(project.id, project);
+    for (const project of projects) map.set(String(project.id), project);
     return map;
   }, [projects]);
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,7 +6,6 @@ import {
   Calendar,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -28,6 +27,7 @@ import {
   updateProject,
 } from "../../services/projectService";
 import { getEmployees } from "../../services/employeeService";
+import { getTeamList } from "../../services/teamService";
 import {
   createContribution,
   deleteContribution,
@@ -37,6 +37,7 @@ import {
 } from "../../services/contributionService";
 import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
 import type { Employee } from "../../types/employee";
+import type { Team } from "../../types/team";
 import type { UserRole } from "../../types/user";
 import type {
   Contribution,
@@ -47,8 +48,9 @@ import type {
 
 const statusStyles: Record<ProjectStatus, string> = {
   active: "bg-emerald-50 text-emerald-600",
-  "on-hold": "bg-amber-50 text-amber-600",
+  on_hold: "bg-amber-50 text-amber-600",
   completed: "bg-slate-100 text-slate-500",
+  archived: "bg-slate-100 text-slate-400",
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -59,8 +61,9 @@ const roleLabels: Record<UserRole, string> = {
 
 const statusLabels: Record<ProjectStatus, string> = {
   active: "Active",
-  "on-hold": "On Hold",
+  on_hold: "On Hold",
   completed: "Completed",
+  archived: "Archived",
 };
 
 const contributionStatusStyles: Record<ContributionStatus, string> = {
@@ -158,6 +161,7 @@ const ProjectDetail = () => {
 
   const [project, setProject] = useState<Project | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -187,36 +191,38 @@ const ProjectDetail = () => {
   const [settingsForm, setSettingsForm] = useState<ProjectFormInput | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
-  const [employeeMenuOpen, setEmployeeMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const employeeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const load = async () => {
       if (!projectId) return;
 
-      const [projectList, employeeList, contributionList] = await Promise.all([
-        getProjects(),
-        getEmployees(),
-        getContributionsByProject(projectId),
-      ]);
+      const [projectList, employeeList, teamList, contributionList] =
+        await Promise.all([
+          getProjects(),
+          getEmployees(),
+          getTeamList(),
+          getContributionsByProject(projectId),
+        ]);
 
-      const found = projectList.find((item) => item.id === projectId) ?? null;
+      const found =
+        projectList.find((item) => String(item.id) === projectId) ?? null;
       setProject(found);
       setEmployees(employeeList);
+      setTeams(teamList);
       setContributions(contributionList);
       setLoading(false);
 
       if (found) {
         setSettingsForm({
           name: found.name,
-          client: found.client,
+          client: found.client ?? "",
           description: found.description,
           status: found.status,
           startDate: found.startDate,
-          endDate: found.endDate,
+          endDate: found.endDate ?? "",
           progress: found.progress,
-          employeeIds: found.employeeIds,
+          teamId: found.teamId,
         });
       }
     };
@@ -224,34 +230,20 @@ const ProjectDetail = () => {
     load();
   }, [projectId]);
 
-  useEffect(() => {
-    if (!employeeMenuOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        employeeMenuRef.current &&
-        !employeeMenuRef.current.contains(event.target as Node)
-      ) {
-        setEmployeeMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [employeeMenuOpen]);
-
   const employeeMap = useMemo(() => {
     const map = new Map<string, Employee>();
     for (const employee of employees) map.set(employee.id, employee);
     return map;
   }, [employees]);
 
+  // Project membership comes from the linked team's members (Users), which
+  // are matched back to Employee records by email — the two tables aren't
+  // directly linked on the frontend.
   const assignedEmployees = useMemo(() => {
     if (!project) return [];
-    return project.employeeIds
-      .map((id) => employeeMap.get(id))
-      .filter((item): item is Employee => Boolean(item));
-  }, [project, employeeMap]);
+    const memberEmails = new Set(project.members.map((member) => member.email));
+    return employees.filter((employee) => memberEmails.has(employee.email));
+  }, [project, employees]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -505,19 +497,6 @@ const ProjectDetail = () => {
     URL.revokeObjectURL(url);
   };
 
-  const toggleSettingsEmployee = (employeeId: string) => {
-    setSettingsForm((prev) =>
-      prev
-        ? {
-            ...prev,
-            employeeIds: prev.employeeIds.includes(employeeId)
-              ? prev.employeeIds.filter((id) => id !== employeeId)
-              : [...prev.employeeIds, employeeId],
-          }
-        : prev,
-    );
-  };
-
   const handleSettingsSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!project || !settingsForm) return;
@@ -595,7 +574,7 @@ const ProjectDetail = () => {
                 {project.name}
               </h1>
               <p className="mt-1 text-sm text-slate-500">
-                {project.client} · Started {project.startDate}
+                {project.client ?? "No client"} · Started {project.startDate}
               </p>
               <p className="mt-2 max-w-xl text-sm text-slate-600">
                 {project.description}
@@ -1219,67 +1198,40 @@ const ProjectDetail = () => {
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     >
                       <option value="active">Active</option>
-                      <option value="on-hold">On Hold</option>
+                      <option value="on_hold">On Hold</option>
                       <option value="completed">Completed</option>
+                      <option value="archived">Archived</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="relative" ref={employeeMenuRef}>
+                <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Assign Employees
+                    Team
                   </label>
-
-                  <button
-                    type="button"
-                    onClick={() => setEmployeeMenuOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-300 px-3 py-2 text-left text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  <select
+                    value={settingsForm.teamId ?? ""}
+                    onChange={(event) =>
+                      setSettingsForm((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              teamId: event.target.value
+                                ? Number(event.target.value)
+                                : null,
+                            }
+                          : prev,
+                      )
+                    }
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
-                    <span
-                      className={
-                        settingsForm.employeeIds.length === 0 ? "text-slate-400" : undefined
-                      }
-                    >
-                      {settingsForm.employeeIds.length === 0
-                        ? "Select employees"
-                        : settingsForm.employeeIds
-                            .map((id) => employeeMap.get(id)?.name)
-                            .filter(Boolean)
-                            .join(", ")}
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`shrink-0 text-slate-400 transition-transform ${employeeMenuOpen ? "rotate-180" : ""}`}
-                    />
-                  </button>
-
-                  {employeeMenuOpen && (
-                    <div className="absolute z-10 mt-1.5 max-h-48 w-full space-y-1 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
-                      {employees.length === 0 && (
-                        <p className="px-2 py-1.5 text-sm text-slate-400">
-                          No employees available
-                        </p>
-                      )}
-
-                      {employees.map((employee) => (
-                        <label
-                          key={employee.id}
-                          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={settingsForm.employeeIds.includes(employee.id)}
-                            onChange={() => toggleSettingsEmployee(employee.id)}
-                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          {employee.name}
-                          <span className="text-xs text-slate-400">
-                            {employee.department}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
+                    <option value="">No team</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">

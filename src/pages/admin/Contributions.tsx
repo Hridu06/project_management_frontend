@@ -90,17 +90,19 @@ const Contributions = () => {
 
   const projectMap = useMemo(() => {
     const map = new Map<string, Project>();
-    for (const project of projects) map.set(project.id, project);
+    for (const project of projects) map.set(String(project.id), project);
     return map;
   }, [projects]);
 
+  // Project membership comes from the linked team's members (Users), which
+  // are matched back to Employee records by email — the two tables aren't
+  // directly linked on the frontend.
   const assignableEmployees = useMemo(() => {
     const project = projectMap.get(form.projectId);
     if (!project) return [];
-    return project.employeeIds
-      .map((id) => employeeMap.get(id))
-      .filter((item): item is Employee => Boolean(item));
-  }, [form.projectId, projectMap, employeeMap]);
+    const memberEmails = new Set(project.members.map((member) => member.email));
+    return employees.filter((employee) => memberEmails.has(employee.email));
+  }, [form.projectId, projectMap, employees]);
 
   const filteredContributions = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -129,7 +131,9 @@ const Contributions = () => {
 
   const handleProjectChange = (projectId: string) => {
     const project = projectMap.get(projectId);
-    const firstEmployeeId = project?.employeeIds[0] ?? "";
+    const memberEmails = new Set(project?.members.map((member) => member.email));
+    const firstEmployeeId =
+      employees.find((employee) => memberEmails.has(employee.email))?.id ?? "";
 
     setForm((prev) => ({
       ...prev,
