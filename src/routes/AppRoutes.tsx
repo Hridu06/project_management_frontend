@@ -60,11 +60,18 @@ const AppRoutes = () => {
                 My Projects summary, admins/managers from the full list. */}
             <Route path="projects/:projectId" element={<ProjectDetail />} />
 
+            {/* My Profile is shared: registered once here (not per-role
+                below) so the path is unambiguous — duplicating "my-profile"
+                under two role-scoped blocks let the first-registered branch
+                win the match for every role, bouncing managers to /login. */}
+            <Route path="my-profile" element={<EmployeeMyProfile />} />
+
             {/* The full projects list/management view is admin & manager
                 only — employees get their own scoped summary at
                 my-projects (see the employee-only block below) instead. */}
             <Route element={<ProtectedRoute allowedRoles={["admin", "manager"]} />}>
               <Route path="projects" element={<Projects />} />
+              <Route path="projects/contributions" element={<Contributions />} />
             </Route>
 
             {/* Employee-only */}
@@ -72,7 +79,6 @@ const AppRoutes = () => {
               <Route path="my-dashboard" element={<EmployeeDashboard />} />
               <Route path="tasks" element={<EmployeeTasks />} />
               <Route path="my-projects" element={<EmployeeProjects />} />
-              <Route path="my-profile" element={<EmployeeMyProfile />} />
             </Route>
 
             {/* Manager-only */}
@@ -87,7 +93,6 @@ const AppRoutes = () => {
               <Route path="employees/:employeeId" element={<EmployeeProfile />} />
               <Route path="users" element={<Users />} />
               <Route path="managers" element={<Managers />} />
-              <Route path="projects/contributions" element={<Contributions />} />
               <Route path="attendance" element={<Attendance />} />
               <Route
                 path="attendance/:employeeId"

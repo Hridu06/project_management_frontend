@@ -51,9 +51,21 @@ const toTask = (data: ApiTask): Task => ({
   updatedAt: data.updated_at,
 });
 
-export const getTasks = async (filters?: { projectId?: number }): Promise<Task[]> => {
+export interface TaskFilters {
+  projectId?: number;
+  assignedTo?: number;
+  status?: Task["status"];
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export const getTasks = async (filters?: TaskFilters): Promise<Task[]> => {
   const params = new URLSearchParams();
   if (filters?.projectId) params.set("project_id", String(filters.projectId));
+  if (filters?.assignedTo) params.set("assigned_to", String(filters.assignedTo));
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters?.dateTo) params.set("date_to", filters.dateTo);
 
   const query = params.toString() ? `?${params.toString()}` : "";
   const data = await apiRequest<TaskListResponse>(`/tasks${query}`);

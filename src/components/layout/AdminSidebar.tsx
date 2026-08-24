@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -8,15 +9,30 @@ import {
   FolderKanban,
   Clock3,
   CalendarDays,
+  Calendar,
   BarChart3,
   Settings,
   ListChecks,
   UserCircle,
+  ChevronDown,
+  ChevronRight,
+  ArrowRight,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, type Role } from "../../context/AuthContext";
+import { getProjects, getMyProjectsSummary } from "../../services/projectService";
+import type { Project } from "../../types/project";
 import logo from "../../assets/Nanosoft.png";
+
+type ProjectTabId = "tasks" | "calendar" | "analytics" | "settings";
+
+const PROJECT_TABS: { id: ProjectTabId; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
+  { id: "tasks", label: "Tasks", icon: ListChecks },
+  { id: "calendar", label: "Calendar", icon: Calendar },
+  { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "settings", label: "Settings", icon: Settings, adminOnly: true },
+];
 
 interface NavItem {
   to: string;
@@ -64,7 +80,7 @@ const navGroups: NavGroup[] = [
         to: "/app/my-profile",
         label: "My Profile",
         icon: UserCircle,
-        roles: ["employee"],
+        roles: ["employee", "manager"],
       },
     ],
   },
@@ -80,20 +96,12 @@ const navGroups: NavGroup[] = [
         label: "Projects",
         icon: FolderKanban,
         roles: ["admin", "manager"],
-        sub: [
-          {
-            to: "/app/projects/contributions",
-            label: "Contributions",
-            icon: ListChecks,
-            roles: ["admin"],
-          },
-        ],
       },
       {
-        to: "/app/my-projects",
-        label: "Projects",
-        icon: FolderKanban,
-        roles: ["employee"],
+        to: "/app/projects/contributions",
+        label: "Contributions",
+        icon: ListChecks,
+        roles: ["admin", "manager"],
       },
     ],
   },
@@ -120,6 +128,53 @@ interface AdminSidebarProps {
 
 const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
   const { user } = useAuth();
+  const location = useLocation();
+  const canManageProjects = user?.role === "admin" || user?.role === "manager";
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [expandedProjectId, setExpandedProjectId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setProjects([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        if (user.role === "employee") {
+          const summaries = await getMyProjectsSummary();
+          if (!cancelled) setProjects(summaries.map((summary) => summary.project));
+        } else {
+          const list = await getProjects();
+          if (!cancelled) setProjects(list);
+        }
+      } catch {
+        if (!cancelled) setProjects([]);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  // Auto-expand the project whose detail page is currently open.
+  useEffect(() => {
+    const match = location.pathname.match(/^\/app\/projects\/(\d+)/);
+    if (match) setExpandedProjectId(Number(match[1]));
+  }, [location.pathname]);
+
+  const toggleProject = (id: number) => {
+    setExpandedProjectId((prev) => (prev === id ? null : id));
+  };
+
+  const projectsListPath = user?.role === "employee" ? "/app/my-projects" : "/app/projects";
+  const visibleProjectTabs = PROJECT_TABS.filter((tab) => !tab.adminOnly || canManageProjects);
+  const activeProjectTab = new URLSearchParams(location.search).get("tab") ?? "tasks";
 
   const visibleGroups = navGroups
     .map((group) => ({
@@ -189,7 +244,7 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
                   <div key={to}>
                     <NavLink
                       to={to}
-                      end={Boolean(sub)}
+                      end
                       onClick={onClose}
                       className={({ isActive }) =>
                         `group flex items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
@@ -229,10 +284,88 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
               </div>
             </div>
           ))}
+
+          {/* Projects — dynamic list of created projects with per-project
+              Tasks/Calendar/Analytics/Settings sub-menu, mirroring the
+              product's project tabs so work can be jumped to directly. */}
+          <div>
+            <div className="mb-2 flex items-center justify-between px-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Projects
+              </p>
+              <NavLink
+                to={projectsListPath}
+                onClick={onClose}
+                className="text-slate-400 transition-colors hover:text-slate-600"
+                aria-label="View all projects"
+              >
+                <ArrowRight size={14} />
+              </NavLink>
+            </div>
+
+            {projects.length === 0 ? (
+              <p className="px-3 text-[13px] text-slate-400">No projects yet.</p>
+            ) : (
+              <div className="space-y-0.5">
+                {projects.map((project) => {
+                  const isExpanded = expandedProjectId === project.id;
+                  const isOnProject = location.pathname === `/app/projects/${project.id}`;
+
+                  return (
+                    <div key={project.id}>
+                      <button
+                        type="button"
+                        onClick={() => toggleProject(project.id)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          isOnProject
+                            ? "text-slate-900"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                        }`}
+                      >
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {project.name}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown size={14} className="shrink-0 text-slate-400" />
+                        ) : (
+                          <ChevronRight size={14} className="shrink-0 text-slate-400" />
+                        )}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-0.5 space-y-0.5">
+                          {visibleProjectTabs.map((tab) => {
+                            const isActive = isOnProject && activeProjectTab === tab.id;
+
+                            return (
+                              <NavLink
+                                key={tab.id}
+                                to={`/app/projects/${project.id}?tab=${tab.id}`}
+                                onClick={onClose}
+                                className={`flex items-center gap-2.5 rounded-lg border-l-2 py-1.5 pl-9 pr-3 text-[13px] font-medium transition-colors ${
+                                  isActive
+                                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                                    : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                                }`}
+                              >
+                                <tab.icon size={15} className="shrink-0" />
+                                <span>{tab.label}</span>
+                              </NavLink>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* User */}
-        <div className="shrink-0 border-t border-slate-100 px-4 py-4">
+        {/* <div className="shrink-0 border-t border-slate-100 px-4 py-4">
           <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
               {(user?.name || "A").charAt(0).toUpperCase()}
@@ -247,7 +380,7 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
               </p>
             </div>
           </div>
-        </div>
+        </div> */}
       </aside>
     </>
   );

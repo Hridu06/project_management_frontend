@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   BarChart3,
@@ -128,6 +128,7 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const ProjectDetail = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   // Managers can edit project settings and manage tasks alongside admins;
@@ -140,7 +141,27 @@ const ProjectDetail = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<TabId>("tasks");
+  // The active tab is driven by the ?tab= query param (not local state) so
+  // the sidebar's per-project sub-menu links can deep-link straight to a tab.
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabId =
+    tabParam === "tasks" ||
+    tabParam === "calendar" ||
+    tabParam === "analytics" ||
+    (tabParam === "settings" && canManageProjects)
+      ? (tabParam as TabId)
+      : "tasks";
+
+  const setActiveTab = (tab: TabId) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // Task modal state
   const [taskModalOpen, setTaskModalOpen] = useState(false);
