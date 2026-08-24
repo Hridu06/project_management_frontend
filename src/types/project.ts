@@ -32,3 +32,21 @@ export interface ProjectFormInput {
   endDate: string;
   teamId: number | null;
 }
+
+export interface MyTaskBreakdown {
+  total: number;
+  notStarted: number;
+  inProgress: number;
+  submitted: number;
+  completed: number;
+}
+
+// Per-project summary of "my" work — what an employee sees on the
+// Projects menu instead of the full projects list.
+export interface MyProjectSummary {
+  project: Project;
+  myTasks: MyTaskBreakdown;
+  myProgress: number;
+  contributionPercent: number;
+  lastActivityAt: string | null;
+}

@@ -26,7 +26,9 @@ const Login = () => {
           ? "/app/dashboard"
           : user.role === "employee"
             ? "/app/my-dashboard"
-            : "/app/teams";
+            : user.role === "manager"
+              ? "/app/manager-dashboard"
+              : "/app/teams";
 
       navigate(destination, { replace: true });
     } catch (err) {

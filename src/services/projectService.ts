@@ -1,5 +1,10 @@
 import { apiRequest } from "./api";
-import type { Project, ProjectFormInput, ProjectMember } from "../types/project";
+import type {
+  MyProjectSummary,
+  Project,
+  ProjectFormInput,
+  ProjectMember,
+} from "../types/project";
 
 interface ApiProject {
   id: number;
@@ -23,6 +28,24 @@ interface ProjectListResponse {
 interface ProjectResponse {
   message: string;
   project: ApiProject;
+}
+
+interface ApiMyProjectSummary {
+  project: ApiProject;
+  my_tasks: {
+    total: number;
+    not_started: number;
+    in_progress: number;
+    submitted: number;
+    completed: number;
+  };
+  my_progress: number;
+  contribution_percent: number;
+  last_activity_at: string | null;
+}
+
+interface MyProjectsSummaryResponse {
+  projects: ApiMyProjectSummary[];
 }
 
 const toProject = (data: ApiProject): Project => ({
@@ -82,3 +105,22 @@ export const updateProject = async (
 
 export const deleteProject = (id: number): Promise<void> =>
   apiRequest(`/projects/${id}`, { method: "DELETE" });
+
+const toMyProjectSummary = (data: ApiMyProjectSummary): MyProjectSummary => ({
+  project: toProject(data.project),
+  myTasks: {
+    total: data.my_tasks.total,
+    notStarted: data.my_tasks.not_started,
+    inProgress: data.my_tasks.in_progress,
+    submitted: data.my_tasks.submitted,
+    completed: data.my_tasks.completed,
+  },
+  myProgress: data.my_progress,
+  contributionPercent: data.contribution_percent,
+  lastActivityAt: data.last_activity_at,
+});
+
+export const getMyProjectsSummary = async (): Promise<MyProjectSummary[]> => {
+  const data = await apiRequest<MyProjectsSummaryResponse>("/projects/my-summary");
+  return data.projects.map(toMyProjectSummary);
+};

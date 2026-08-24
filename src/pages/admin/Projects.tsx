@@ -9,6 +9,7 @@ import {
   updateProject,
 } from "../../services/projectService";
 import { getTeamList } from "../../services/teamService";
+import { useAuth } from "../../context/AuthContext";
 import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
 import type { Team } from "../../types/team";
 
@@ -38,6 +39,13 @@ const statusLabels: Record<ProjectStatus, string> = {
 };
 
 const Projects = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager";
+  // Managers can create and edit projects alongside admins; deleting stays
+  // admin-only. Employees get a read-only view.
+  const canManageProjects = isAdmin || isManager;
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,18 +140,22 @@ const Projects = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Projects</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Create projects and assign employees to them.
+            {canManageProjects
+              ? "Create projects and assign employees to them."
+              : "Projects you're assigned to and their progress."}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-        >
-          <Plus size={18} />
-          Add Project
-        </button>
+        {canManageProjects && (
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus size={18} />
+            Add Project
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -272,20 +284,8 @@ const Projects = () => {
                       )}
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-blue-600"
-                            style={{
-                              width: `${Math.min(100, Math.max(0, project.progress))}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-medium text-slate-600">
-                          {project.progress}%
-                        </span>
-                      </div>
+                    <td className="px-6 py-4 text-sm font-medium text-slate-600">
+                      {project.progress}%
                     </td>
 
                     <td className="px-6 py-4">
@@ -306,23 +306,27 @@ const Projects = () => {
                           <Eye size={16} />
                         </Link>
 
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(project)}
-                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                          aria-label={`Edit ${project.name}`}
-                        >
-                          <Pencil size={16} />
-                        </button>
+                        {canManageProjects && (
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(project)}
+                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                            aria-label={`Edit ${project.name}`}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
 
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(project)}
-                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
-                          aria-label={`Delete ${project.name}`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(project)}
+                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                            aria-label={`Delete ${project.name}`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

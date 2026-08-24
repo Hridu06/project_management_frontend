@@ -49,6 +49,12 @@ const navGroups: NavGroup[] = [
         roles: ["employee"],
       },
       {
+        to: "/app/manager-dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        roles: ["manager"],
+      },
+      {
         to: "/app/tasks",
         label: "My Tasks",
         icon: ListChecks,
@@ -73,14 +79,21 @@ const navGroups: NavGroup[] = [
         to: "/app/projects",
         label: "Projects",
         icon: FolderKanban,
-        roles: ["admin"],
+        roles: ["admin", "manager"],
         sub: [
           {
             to: "/app/projects/contributions",
             label: "Contributions",
             icon: ListChecks,
+            roles: ["admin"],
           },
         ],
+      },
+      {
+        to: "/app/my-projects",
+        label: "Projects",
+        icon: FolderKanban,
+        roles: ["employee"],
       },
     ],
   },
@@ -111,9 +124,15 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => !item.roles || (user && item.roles.includes(user.role)),
-      ),
+      items: group.items
+        .filter((item) => !item.roles || (user && item.roles.includes(user.role)))
+        .map((item) => ({
+          ...item,
+          sub: item.sub?.filter(
+            (subItem) =>
+              !subItem.roles || (user && subItem.roles.includes(user.role)),
+          ),
+        })),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -122,14 +141,14 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
       {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden print:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r border-slate-200 bg-white shadow-[2px_0_12px_-4px_rgba(15,23,42,0.06)] transition-transform duration-200 ease-in-out md:z-40 md:translate-x-0 ${
+        className={`fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r border-slate-200 bg-white shadow-[2px_0_12px_-4px_rgba(15,23,42,0.06)] transition-transform duration-200 ease-in-out md:z-40 md:translate-x-0 print:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

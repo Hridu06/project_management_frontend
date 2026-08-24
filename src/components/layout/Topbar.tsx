@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
+  CheckCircle2,
   ChevronDown,
   KeyRound,
   LogOut,
@@ -13,6 +14,12 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import ChangePasswordModal from "../common/ChangePasswordModal";
+import {
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../../services/notificationService";
+import type { AppNotification } from "../../types/notification";
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   dashboard: {
@@ -22,6 +29,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   "my-dashboard": {
     title: "Dashboard",
     subtitle: "Your project activity",
+  },
+  "manager-dashboard": {
+    title: "Dashboard",
+    subtitle: "Your teams and projects",
   },
   tasks: {
     title: "My Tasks",
@@ -42,6 +53,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   projects: {
     title: "Projects",
     subtitle: "Manage projects and assignments",
+  },
+  "my-projects": {
+    title: "Projects",
+    subtitle: "Projects you're working on and your contribution",
   },
   attendance: {
     title: "Attendance",
@@ -72,10 +87,56 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    getNotifications().then((data) => {
+      if (!cancelled) setNotifications(data);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
+  };
+
+  const handleOpenNotifications = () => {
+    setNotifOpen((open) => !open);
+  };
+
+  const handleNotificationClick = async (notification: AppNotification) => {
+    if (notification.isRead) return;
+
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === notification.id ? { ...item, isRead: true } : item)),
+    );
+
+    try {
+      await markNotificationRead(notification.id);
+    } catch {
+      // Non-critical — the badge will re-sync on next load.
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+
+    try {
+      await markAllNotificationsRead();
+    } catch {
+      // Non-critical — the badge will re-sync on next load.
+    }
   };
 
   const primarySegment = location.pathname.split("/").filter(Boolean)[1] ?? "dashboard";
@@ -86,7 +147,7 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
   const displayRole = user?.role ?? "admin";
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-30 h-16 md:h-20 border-b border-slate-200 bg-white md:left-64">
+    <header className="fixed left-0 right-0 top-0 z-30 h-16 md:h-20 border-b border-slate-200 bg-white md:left-64 print:hidden">
       <div className="flex h-full items-center justify-between gap-2 px-3 sm:px-4 md:px-6">
         {/* Left Section */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
@@ -137,15 +198,66 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
           </button>
 
           {/* Notification */}
-          <button
-            type="button"
-            className="relative rounded-lg p-1.5 sm:p-2 md:p-2.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Notifications"
-          >
-            <Bell size={16} className="sm:w-[18px] sm:h-[18px] md:w-5 md:h-5" />
-            {/* Notification Badge */}
-            <span className="absolute right-1 top-1 flex h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-red-500" />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={handleOpenNotifications}
+              className="relative rounded-lg p-1.5 sm:p-2 md:p-2.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Notifications"
+            >
+              <Bell size={16} className="sm:w-[18px] sm:h-[18px] md:w-5 md:h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute right-1 top-1 flex h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-red-500" />
+              )}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-72 sm:mt-2 sm:w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+                  <p className="text-sm font-semibold text-slate-800">Notifications</p>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 && (
+                    <p className="px-4 py-6 text-center text-sm text-slate-400">
+                      No notifications yet
+                    </p>
+                  )}
+
+                  {notifications.map((notification) => (
+                    <button
+                      key={notification.id}
+                      type="button"
+                      onClick={() => handleNotificationClick(notification)}
+                      className={`flex w-full items-start gap-2.5 border-b border-slate-50 px-4 py-3 text-left transition-colors last:border-0 hover:bg-slate-50 ${
+                        notification.isRead ? "" : "bg-blue-50/50"
+                      }`}
+                    >
+                      <CheckCircle2
+                        size={16}
+                        className={`mt-0.5 shrink-0 ${notification.isRead ? "text-slate-300" : "text-emerald-500"}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{notification.title}</p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                          {notification.message}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Divider - Hidden on smaller screens */}
           <div className="hidden sm:block mx-1 sm:mx-2 h-6 sm:h-7 md:h-8 w-px bg-slate-200" />
