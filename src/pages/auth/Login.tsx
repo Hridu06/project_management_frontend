@@ -19,7 +19,7 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      const user = await login(identifier.trim(), password);
+      const user = await login(identifier.trim(), password.trim());
 
       const destination =
         user.role === "admin"
