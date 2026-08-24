@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -74,6 +74,12 @@ const navGroups: NavGroup[] = [
         to: "/app/tasks",
         label: "My Tasks",
         icon: ListChecks,
+        roles: ["employee"],
+      },
+      {
+        to: "/app/my-contributions",
+        label: "Contributions",
+        icon: FolderKanban,
         roles: ["employee"],
       },
       {
@@ -234,134 +240,138 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
         {/* Navigation */}
         <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
           {visibleGroups.map((group) => (
-            <div key={group.label}>
-              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                {group.label}
-              </p>
+            <Fragment key={group.label}>
+              <div>
+                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {group.label}
+                </p>
 
-              <div className="space-y-0.5">
-                {group.items.map(({ to, label, icon: Icon, sub }) => (
-                  <div key={to}>
-                    <NavLink
-                      to={to}
-                      end
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        `group flex items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? "border-blue-600 bg-blue-50 text-blue-700"
-                            : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                        }`
-                      }
-                    >
-                      <Icon size={17} className="shrink-0" />
-                      <span>{label}</span>
-                    </NavLink>
-
-                    {sub && (
-                      <div className="mt-0.5 space-y-0.5">
-                        {sub.map((subItem) => (
-                          <NavLink
-                            key={subItem.to}
-                            to={subItem.to}
-                            onClick={onClose}
-                            className={({ isActive }) =>
-                              `flex items-center gap-2.5 rounded-lg border-l-2 py-1.5 pl-9 pr-3 text-[13px] font-medium transition-colors ${
-                                isActive
-                                  ? "border-blue-600 bg-blue-50 text-blue-700"
-                                  : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                              }`
-                            }
-                          >
-                            <subItem.icon size={15} className="shrink-0" />
-                            <span>{subItem.label}</span>
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* Projects — dynamic list of created projects with per-project
-              Tasks/Calendar/Analytics/Settings sub-menu, mirroring the
-              product's project tabs so work can be jumped to directly. */}
-          <div>
-            <div className="mb-2 flex items-center justify-between px-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Projects
-              </p>
-              <NavLink
-                to={projectsListPath}
-                onClick={onClose}
-                className="text-slate-400 transition-colors hover:text-slate-600"
-                aria-label="View all projects"
-              >
-                <ArrowRight size={14} />
-              </NavLink>
-            </div>
-
-            {projects.length === 0 ? (
-              <p className="px-3 text-[13px] text-slate-400">No projects yet.</p>
-            ) : (
-              <div className="space-y-0.5">
-                {projects.map((project) => {
-                  const isExpanded = expandedProjectId === project.id;
-                  const isOnProject = location.pathname === `/app/projects/${project.id}`;
-
-                  return (
-                    <div key={project.id}>
-                      <button
-                        type="button"
-                        onClick={() => toggleProject(project.id)}
-                        className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          isOnProject
-                            ? "text-slate-900"
-                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                        }`}
+                <div className="space-y-0.5">
+                  {group.items.map(({ to, label, icon: Icon, sub }) => (
+                    <div key={to}>
+                      <NavLink
+                        to={to}
+                        end
+                        onClick={onClose}
+                        className={({ isActive }) =>
+                          `group flex items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors ${
+                            isActive
+                              ? "border-blue-600 bg-blue-50 text-blue-700"
+                              : "border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          }`
+                        }
                       >
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                        <span className="min-w-0 flex-1 truncate text-left">
-                          {project.name}
-                        </span>
-                        {isExpanded ? (
-                          <ChevronDown size={14} className="shrink-0 text-slate-400" />
-                        ) : (
-                          <ChevronRight size={14} className="shrink-0 text-slate-400" />
-                        )}
-                      </button>
+                        <Icon size={17} className="shrink-0" />
+                        <span>{label}</span>
+                      </NavLink>
 
-                      {isExpanded && (
+                      {sub && (
                         <div className="mt-0.5 space-y-0.5">
-                          {visibleProjectTabs.map((tab) => {
-                            const isActive = isOnProject && activeProjectTab === tab.id;
-
-                            return (
-                              <NavLink
-                                key={tab.id}
-                                to={`/app/projects/${project.id}?tab=${tab.id}`}
-                                onClick={onClose}
-                                className={`flex items-center gap-2.5 rounded-lg border-l-2 py-1.5 pl-9 pr-3 text-[13px] font-medium transition-colors ${
+                          {sub.map((subItem) => (
+                            <NavLink
+                              key={subItem.to}
+                              to={subItem.to}
+                              onClick={onClose}
+                              className={({ isActive }) =>
+                                `flex items-center gap-2.5 rounded-lg border-l-2 py-1.5 pl-9 pr-3 text-[13px] font-medium transition-colors ${
                                   isActive
                                     ? "border-blue-600 bg-blue-50 text-blue-700"
                                     : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                                }`}
-                              >
-                                <tab.icon size={15} className="shrink-0" />
-                                <span>{tab.label}</span>
-                              </NavLink>
-                            );
-                          })}
+                                }`
+                              }
+                            >
+                              <subItem.icon size={15} className="shrink-0" />
+                              <span>{subItem.label}</span>
+                            </NavLink>
+                          ))}
                         </div>
                       )}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
+
+              {group.label === "Management" && (
+                // Projects — dynamic list of created projects with per-project
+                // Tasks/Calendar/Analytics/Settings sub-menu, mirroring the
+                // product's project tabs so work can be jumped to directly.
+                <div>
+                  <div className="mb-2 flex items-center justify-between px-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      Projects
+                    </p>
+                    <NavLink
+                      to={projectsListPath}
+                      onClick={onClose}
+                      className="text-slate-400 transition-colors hover:text-slate-600"
+                      aria-label="View all projects"
+                    >
+                      <ArrowRight size={14} />
+                    </NavLink>
+                  </div>
+
+                  {projects.length === 0 ? (
+                    <p className="px-3 text-[13px] text-slate-400">No projects yet.</p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {projects.map((project) => {
+                        const isExpanded = expandedProjectId === project.id;
+                        const isOnProject = location.pathname === `/app/projects/${project.id}`;
+
+                        return (
+                          <div key={project.id}>
+                            <button
+                              type="button"
+                              onClick={() => toggleProject(project.id)}
+                              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                isOnProject
+                                  ? "text-slate-900"
+                                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                              }`}
+                            >
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                              <span className="min-w-0 flex-1 truncate text-left">
+                                {project.name}
+                              </span>
+                              {isExpanded ? (
+                                <ChevronDown size={14} className="shrink-0 text-slate-400" />
+                              ) : (
+                                <ChevronRight size={14} className="shrink-0 text-slate-400" />
+                              )}
+                            </button>
+
+                            {isExpanded && (
+                              <div className="mt-0.5 space-y-0.5">
+                                {visibleProjectTabs.map((tab) => {
+                                  const isActive = isOnProject && activeProjectTab === tab.id;
+
+                                  return (
+                                    <NavLink
+                                      key={tab.id}
+                                      to={`/app/projects/${project.id}?tab=${tab.id}`}
+                                      onClick={onClose}
+                                      className={`flex items-center gap-2.5 rounded-lg border-l-2 py-1.5 pl-9 pr-3 text-[13px] font-medium transition-colors ${
+                                        isActive
+                                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                                          : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                                      }`}
+                                    >
+                                      <tab.icon size={15} className="shrink-0" />
+                                      <span>{tab.label}</span>
+                                    </NavLink>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Fragment>
+          ))}
         </nav>
 
         {/* User */}

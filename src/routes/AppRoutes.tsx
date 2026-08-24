@@ -13,6 +13,7 @@ import EmployeeProfile from "../pages/employees/profile";
 import EmployeeDashboard from "../pages/employees/dashboard";
 import EmployeeTasks from "../pages/employees/tasks";
 import EmployeeProjects from "../pages/employees/projects";
+import EmployeeContributions from "../pages/employees/contributions";
 import EmployeeMyProfile from "../pages/employees/my-profile";
 import ManagerDashboard from "../pages/managers/dashboard";
 import Users from "../pages/admin/Users";
@@ -79,6 +80,7 @@ const AppRoutes = () => {
               <Route path="my-dashboard" element={<EmployeeDashboard />} />
               <Route path="tasks" element={<EmployeeTasks />} />
               <Route path="my-projects" element={<EmployeeProjects />} />
+              <Route path="my-contributions" element={<EmployeeContributions />} />
             </Route>
 
             {/* Manager-only */}
