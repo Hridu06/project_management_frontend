@@ -21,6 +21,7 @@ import Managers from "../pages/admin/Managers";
 import Teams from "../pages/admin/Teams";
 import Projects from "../pages/admin/Projects";
 import ProjectDetail from "../pages/admin/ProjectDetail";
+import TaskManager from "../pages/admin/TaskManager";
 import Contributions from "../pages/admin/Contributions";
 import Attendance from "../pages/admin/Attendance";
 import EmployeeAttendanceCalendar from "../pages/admin/EmployeeAttendanceCalendar";
@@ -72,6 +73,7 @@ const AppRoutes = () => {
                 my-projects (see the employee-only block below) instead. */}
             <Route element={<ProtectedRoute allowedRoles={["admin", "manager"]} />}>
               <Route path="projects" element={<Projects />} />
+              <Route path="projects/tasks" element={<TaskManager />} />
               <Route path="projects/contributions" element={<Contributions />} />
             </Route>
 

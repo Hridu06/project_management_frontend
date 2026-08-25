@@ -352,7 +352,7 @@ const Users = () => {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Employee
+              Employee <span className="text-red-500">*</span>
             </label>
             <select
               required
@@ -385,7 +385,7 @@ const Users = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Login Email
+                Login Email <span className="text-red-500">*</span>
               </label>
               <input
                 required
@@ -422,6 +422,7 @@ const Users = () => {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
               Password{" "}
+              {!editingId && <span className="text-red-500">*</span>}{" "}
               {editingId && (
                 <span className="font-normal text-slate-400">
                   (leave blank to keep current)

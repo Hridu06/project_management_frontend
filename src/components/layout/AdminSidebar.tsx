@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowRight,
+  ClipboardList,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -101,6 +102,12 @@ const navGroups: NavGroup[] = [
         to: "/app/projects",
         label: "Projects",
         icon: FolderKanban,
+        roles: ["admin", "manager"],
+      },
+      {
+        to: "/app/projects/tasks",
+        label: "Tasks",
+        icon: ClipboardList,
         roles: ["admin", "manager"],
       },
       {

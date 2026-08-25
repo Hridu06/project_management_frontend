@@ -309,7 +309,7 @@ const Employees = () => {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Full Name
+              Full Name <span className="text-red-500">*</span>
             </label>
             <input
               required
@@ -325,7 +325,7 @@ const Employees = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Email
+                Email <span className="text-red-500">*</span>
               </label>
               <input
                 required
@@ -373,7 +373,7 @@ const Employees = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Department
+                Department <span className="text-red-500">*</span>
               </label>
               <select
                 required
@@ -401,7 +401,7 @@ const Employees = () => {
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Designation
+                Designation <span className="text-red-500">*</span>
               </label>
               <select
                 required
@@ -471,7 +471,7 @@ const Employees = () => {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Join Date
+              Join Date <span className="text-red-500">*</span>
             </label>
             <input
               required

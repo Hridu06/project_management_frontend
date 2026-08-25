@@ -347,7 +347,7 @@ const Teams = () => {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Team Name
+              Team Name <span className="text-red-500">*</span>
             </label>
             <input
               required

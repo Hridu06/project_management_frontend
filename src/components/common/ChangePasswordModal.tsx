@@ -83,7 +83,7 @@ const ChangePasswordModal = ({ open, onClose }: ChangePasswordModalProps) => {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Current Password
+              Current Password <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -110,7 +110,7 @@ const ChangePasswordModal = ({ open, onClose }: ChangePasswordModalProps) => {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              New Password
+              New Password <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -139,7 +139,7 @@ const ChangePasswordModal = ({ open, onClose }: ChangePasswordModalProps) => {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Confirm New Password
+              Confirm New Password <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input

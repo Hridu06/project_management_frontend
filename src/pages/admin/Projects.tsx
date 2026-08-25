@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   Eye,
-  FileText,
   FolderKanban,
-  GitFork,
   Pencil,
   Plus,
   Search,
@@ -190,193 +188,127 @@ const Projects = () => {
         />
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1020px] text-left">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Project
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Client
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Assigned
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Start Date
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  End Date
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Progress
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">
-                    Loading projects...
-                  </td>
-                </tr>
-              )}
-
-              {!loading && filteredProjects.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-14">
-                    <div className="flex flex-col items-center gap-2 text-center">
-                      <FolderKanban size={22} className="text-slate-300" />
-                      <p className="text-sm font-medium text-slate-500">
-                        No projects found
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {!loading &&
-                filteredProjects.map((project) => (
-                  <tr
-                    key={project.id}
-                    className="border-b border-slate-100 last:border-0"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600">
-                          <FolderKanban size={16} />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <Link
-                              to={`/app/projects/${project.id}`}
-                              className="text-sm font-medium text-slate-800 hover:text-blue-600 hover:underline"
-                            >
-                              {project.name}
-                            </Link>
-                            {/* {project.githubLink && (
-                              <a
-                                href={project.githubLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-slate-400 transition-colors hover:text-slate-700"
-                                title="GitHub repository"
-                                aria-label={`${project.name} GitHub repository`}
-                              >
-                                <GitFork size={14} />
-                              </a>
-                            )} */}
-                            {/* {project.pdf && (
-                              <a
-                                href={project.pdf}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-slate-400 transition-colors hover:text-red-600"
-                                title="Project PDF"
-                                aria-label={`${project.name} PDF`}
-                              >
-                                <FileText size={14} />
-                              </a>
-                            )} */}
-                          </div>
-                          <p className="line-clamp-1 max-w-[220px] text-xs text-slate-500">
-                            {project.description}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {project.client || <span className="text-slate-400">—</span>}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      {project.teamName ? (
-                        <span className="text-sm text-slate-600">
-                          {project.teamName}
-                          <span className="ml-1.5 text-xs text-slate-400">
-                            ({project.members.length})
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-sm text-slate-400">
-                          Unassigned
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {project.startDate}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {project.endDate || (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-medium text-slate-600">
-                      {project.progress}%
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[project.status]}`}
-                      >
-                        {statusLabels[project.status]}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link
-                          to={`/app/projects/${project.id}`}
-                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                          aria-label={`View ${project.name}`}
-                        >
-                          <Eye size={16} />
-                        </Link>
-
-                        {canManageProjects && (
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(project)}
-                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                            aria-label={`Edit ${project.name}`}
-                          >
-                            <Pencil size={16} />
-                          </button>
-                        )}
-
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(project)}
-                            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
-                            aria-label={`Delete ${project.name}`}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+      {/* Project Cards */}
+      {loading && (
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-400">
+          Loading projects...
         </div>
-      </div>
+      )}
+
+      {!loading && filteredProjects.length === 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-14">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <FolderKanban size={22} className="text-slate-300" />
+            <p className="text-sm font-medium text-slate-500">
+              No projects found
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && filteredProjects.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredProjects.map((project) => (
+            <div
+              key={project.id}
+              className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                    <FolderKanban size={18} />
+                  </div>
+
+                  <div>
+                    <Link
+                      to={`/app/projects/${project.id}`}
+                      className="text-sm font-semibold text-slate-800 hover:text-blue-600 hover:underline"
+                    >
+                      {project.name}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {project.client || "No client"}
+                    </p>
+                  </div>
+                </div>
+
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[project.status]}`}
+                >
+                  {statusLabels[project.status]}
+                </span>
+              </div>
+
+              <p className="line-clamp-2 text-xs text-slate-500">
+                {project.description}
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-slate-400">Start Date</p>
+                  <p className="mt-0.5 font-medium text-slate-700">
+                    {project.startDate}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-slate-400">Assigned</p>
+                  <p className="mt-0.5 font-medium text-slate-700">
+                    {project.teamName ?? "Unassigned"}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Progress</span>
+                  <span className="font-semibold text-slate-700">
+                    {project.progress}%
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{ width: `${project.progress}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-1 border-t border-slate-100 pt-3">
+                <Link
+                  to={`/app/projects/${project.id}`}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                  aria-label={`View ${project.name}`}
+                >
+                  <Eye size={16} />
+                </Link>
+
+                {/* {canManageProjects && (
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(project)}
+                    className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                    aria-label={`Edit ${project.name}`}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )} */}
+
+                {/* {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(project)}
+                    className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                    aria-label={`Delete ${project.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )} */}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       <Modal
@@ -388,7 +320,7 @@ const Projects = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Project Name
+                Project Name <span className="text-red-500">*</span>
               </label>
               <input
                 required
@@ -403,7 +335,7 @@ const Projects = () => {
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Client
+                Client <span className="text-red-500">*</span>
               </label>
               <input
                 required
@@ -437,7 +369,7 @@ const Projects = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Start Date
+                Start Date <span className="text-red-500">*</span>
               </label>
               <input
                 required

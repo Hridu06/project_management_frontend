@@ -1111,7 +1111,7 @@ const ProjectDetail = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Project Name
+                      Project Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       required
@@ -1128,7 +1128,7 @@ const ProjectDetail = () => {
 
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Client
+                      Client <span className="text-red-500">*</span>
                     </label>
                     <input
                       required
@@ -1163,7 +1163,7 @@ const ProjectDetail = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Start Date
+                      Start Date <span className="text-red-500">*</span>
                     </label>
                     <input
                       required
@@ -1354,7 +1354,7 @@ const ProjectDetail = () => {
         <form className="space-y-4" onSubmit={handleTaskSubmit}>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Title
+              Title <span className="text-red-500">*</span>
             </label>
             <input
               required
@@ -1386,7 +1386,7 @@ const ProjectDetail = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Assignee
+                Assignee <span className="text-red-500">*</span>
               </label>
               <select
                 required

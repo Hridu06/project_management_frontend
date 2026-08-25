@@ -42,6 +42,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     title: "My Profile",
     subtitle: "View and edit your details",
   },
+  teams: {
+    title: "Teams",
+    subtitle: "Manage teams and their members",
+  },
   employees: {
     title: "Employees",
     subtitle: "Manage employee records",
@@ -50,6 +54,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
     title: "Managers",
     subtitle: "Manage manager accounts",
   },
+  users: {
+    title: "Users",
+    subtitle: "Manage user accounts",
+  },
   projects: {
     title: "Projects",
     subtitle: "Manage projects and assignments",
@@ -57,6 +65,18 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   "my-projects": {
     title: "Projects",
     subtitle: "Projects you're working on and your contribution",
+  },
+  "projects/tasks": {
+    title: "Tasks",
+    subtitle: "Select a project to view and add tasks",
+  },
+  "projects/contributions": {
+    title: "Contributions",
+    subtitle: "Task activity across all employees",
+  },
+  "my-contributions": {
+    title: "Contributions",
+    subtitle: "Your task activity and progress",
   },
   attendance: {
     title: "Attendance",
@@ -139,9 +159,13 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
     }
   };
 
-  const primarySegment = location.pathname.split("/").filter(Boolean)[1] ?? "dashboard";
+  const segments = location.pathname.split("/").filter(Boolean);
+  const primarySegment = segments[1] ?? "dashboard";
+  const secondarySegment = segments[2];
+  const combinedKey = secondarySegment ? `${primarySegment}/${secondarySegment}` : undefined;
+  const combinedEntry = combinedKey ? pageTitles[combinedKey] : undefined;
   const { title: pageTitle, subtitle: pageSubtitle } =
-    pageTitles[primarySegment] ?? pageTitles.dashboard;
+    combinedEntry ?? pageTitles[primarySegment] ?? pageTitles.dashboard;
 
   const displayName = user?.name || "Admin";
   const displayRole = user?.role ?? "admin";
