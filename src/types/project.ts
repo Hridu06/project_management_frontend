@@ -13,6 +13,8 @@ export interface Project {
   status: ProjectStatus;
   client: string | null;
   progress: number;
+  pdf: string | null;
+  githubLink: string | null;
   startDate: string;
   endDate: string | null;
   teamId: number | null;
@@ -28,6 +30,8 @@ export interface ProjectFormInput {
   status: ProjectStatus;
   client: string;
   progress: number;
+  pdfFile: File | null;
+  githubLink: string;
   startDate: string;
   endDate: string;
   teamId: number | null;

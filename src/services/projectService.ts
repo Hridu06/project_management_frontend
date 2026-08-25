@@ -13,6 +13,8 @@ interface ApiProject {
   status: Project["status"];
   client: string | null;
   progress: number;
+  pdf: string | null;
+  github_link: string | null;
   start_date: string;
   end_date: string | null;
   team: { id: number; name: string; members: ProjectMember[] } | null;
@@ -55,6 +57,8 @@ const toProject = (data: ApiProject): Project => ({
   status: data.status,
   client: data.client,
   progress: data.progress,
+  pdf: data.pdf,
+  githubLink: data.github_link,
   startDate: data.start_date,
   endDate: data.end_date,
   teamId: data.team?.id ?? null,
@@ -64,16 +68,20 @@ const toProject = (data: ApiProject): Project => ({
   ownerName: data.owner?.name ?? null,
 });
 
-const toRequestBody = (input: ProjectFormInput) => ({
-  name: input.name,
-  description: input.description,
-  status: input.status,
-  client: input.client || null,
-  progress: input.progress,
-  start_date: input.startDate,
-  end_date: input.endDate || null,
-  team_id: input.teamId,
-});
+const toFormData = (input: ProjectFormInput): FormData => {
+  const formData = new FormData();
+  formData.append("name", input.name);
+  formData.append("description", input.description);
+  formData.append("status", input.status);
+  if (input.client) formData.append("client", input.client);
+  formData.append("progress", String(input.progress));
+  formData.append("start_date", input.startDate);
+  if (input.endDate) formData.append("end_date", input.endDate);
+  if (input.githubLink) formData.append("github_link", input.githubLink);
+  if (input.pdfFile) formData.append("pdf", input.pdfFile);
+  if (input.teamId !== null) formData.append("team_id", String(input.teamId));
+  return formData;
+};
 
 export const getProjects = async (): Promise<Project[]> => {
   const data = await apiRequest<ProjectListResponse>("/projects");
@@ -85,7 +93,7 @@ export const createProject = async (
 ): Promise<Project> => {
   const data = await apiRequest<ProjectResponse>("/projects", {
     method: "POST",
-    body: toRequestBody(input),
+    body: toFormData(input),
   });
 
   return toProject(data.project);
@@ -95,9 +103,14 @@ export const updateProject = async (
   id: number,
   input: ProjectFormInput,
 ): Promise<Project> => {
+  const formData = toFormData(input);
+  // Laravel doesn't parse multipart bodies on real PUT requests, so spoof
+  // the method via POST + `_method` (browsers can't send PUT+multipart).
+  formData.append("_method", "PUT");
+
   const data = await apiRequest<ProjectResponse>(`/projects/${id}`, {
-    method: "PUT",
-    body: toRequestBody(input),
+    method: "POST",
+    body: formData,
   });
 
   return toProject(data.project);

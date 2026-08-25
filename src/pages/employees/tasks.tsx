@@ -5,8 +5,10 @@ import {
   ChevronDown,
   ClipboardList,
   FolderKanban,
+  History,
   Loader2,
   Search,
+  UserRound,
 } from "lucide-react";
 import {
   getTasks,
@@ -14,6 +16,7 @@ import {
   submitTask,
   toggleSubtask,
 } from "../../services/taskService";
+import TaskActivityModal from "../../components/tasks/TaskActivityModal";
 import type { Task, TaskPriority, TaskStatus } from "../../types/task";
 
 const statusFilters: Array<{ value: "all" | TaskStatus; label: string }> = [
@@ -24,11 +27,11 @@ const statusFilters: Array<{ value: "all" | TaskStatus; label: string }> = [
   { value: "completed", label: "Approved" },
 ];
 
-const statusMeta: Record<TaskStatus, { label: string; badge: string; dot: string; bar: string }> = {
-  not_started: { label: "Not Started", badge: "bg-slate-100 text-slate-500", dot: "bg-slate-400", bar: "bg-slate-400" },
-  in_progress: { label: "In Progress", badge: "bg-amber-50 text-amber-600", dot: "bg-amber-500", bar: "bg-amber-500" },
-  submitted: { label: "Waiting for Review", badge: "bg-blue-50 text-blue-600", dot: "bg-blue-500", bar: "bg-blue-500" },
-  completed: { label: "Approved", badge: "bg-emerald-50 text-emerald-600", dot: "bg-emerald-500", bar: "bg-emerald-500" },
+const statusMeta: Record<TaskStatus, { label: string; badge: string; dot: string; ring: string }> = {
+  not_started: { label: "Not Started", badge: "bg-slate-100 text-slate-500", dot: "bg-slate-400", ring: "#94a3b8" },
+  in_progress: { label: "In Progress", badge: "bg-amber-50 text-amber-600", dot: "bg-amber-500", ring: "#f59e0b" },
+  submitted: { label: "Waiting for Review", badge: "bg-blue-50 text-blue-600", dot: "bg-blue-500", ring: "#3b82f6" },
+  completed: { label: "Approved", badge: "bg-emerald-50 text-emerald-600", dot: "bg-emerald-500", ring: "#10b981" },
 };
 
 const priorityStyles: Record<TaskPriority, string> = {
@@ -55,6 +58,7 @@ const EmployeeTasks = () => {
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [activityTask, setActivityTask] = useState<Task | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -293,6 +297,7 @@ const EmployeeTasks = () => {
                         onStart={() => handleStart(task)}
                         onSubmit={() => handleSubmit(task)}
                         onToggleSubtask={(subtaskId) => handleToggleSubtask(task, subtaskId)}
+                        onViewActivity={() => setActivityTask(task)}
                       />
                     ))}
                   </div>
@@ -302,6 +307,13 @@ const EmployeeTasks = () => {
           })}
         </div>
       )}
+
+      <TaskActivityModal
+        open={activityTask != null}
+        onClose={() => setActivityTask(null)}
+        taskId={activityTask?.id ?? null}
+        taskTitle={activityTask?.title}
+      />
     </div>
   );
 };
@@ -312,56 +324,57 @@ interface TaskCardProps {
   onStart: () => void;
   onSubmit: () => void;
   onToggleSubtask: (subtaskId: number) => void;
+  onViewActivity: () => void;
 }
 
-const TaskCard = ({ task, busy, onStart, onSubmit, onToggleSubtask }: TaskCardProps) => {
+const TaskCard = ({ task, busy, onStart, onSubmit, onToggleSubtask, onViewActivity }: TaskCardProps) => {
   const status = statusMeta[task.status];
   const completedSubtasks = task.subtasks.filter((subtask) => subtask.status === "completed").length;
 
   return (
-    <div className="space-y-3 px-5 py-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-800">{task.title}</p>
-          {task.description && (
-            <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{task.description}</p>
-          )}
-          {task.dueDate && (
-            <div className="mt-2 flex items-center gap-1 text-xs text-slate-400">
-              <Calendar size={12} />
-              Due {task.dueDate}
+    <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-start">
+      <PercentRing value={task.progress} color={status.ring} />
+
+      <div className="min-w-0 flex-1 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-800">{task.title}</p>
+            {task.description && (
+              <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{task.description}</p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+              {task.dueDate && (
+                <span className="flex items-center gap-1">
+                  <Calendar size={12} />
+                  Due {task.dueDate}
+                </span>
+              )}
+              {task.createdBy && (
+                <span className="flex items-center gap-1">
+                  <UserRound size={12} />
+                  Added by {task.createdBy.name}
+                </span>
+              )}
+              {task.startedAt && (
+                <span>Started {new Date(task.startedAt).toLocaleDateString()}</span>
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${status.badge}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+              {status.label}
+            </span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priorityStyles[task.priority]}`}>
+              {priorityLabels[task.priority]}
+            </span>
+          </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${status.badge}`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-            {status.label}
-          </span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priorityStyles[task.priority]}`}>
-            {priorityLabels[task.priority]}
-          </span>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div>
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <span>Progress</span>
-          <span className="font-medium text-slate-700">{task.progress}%</span>
-        </div>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${status.bar}`}
-            style={{ width: `${task.progress}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Sub-tasks checklist */}
+        {/* Sub-tasks checklist */}
       {task.subtasks.length > 0 && (
         <div className="space-y-1.5 rounded-lg bg-slate-50 p-3">
           <p className="text-xs font-medium text-slate-500">
@@ -390,6 +403,15 @@ const TaskCard = ({ task, busy, onStart, onSubmit, onToggleSubtask }: TaskCardPr
       )}
 
       {/* Actions / status messaging */}
+      <button
+        type="button"
+        onClick={onViewActivity}
+        className="flex w-fit items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-600"
+      >
+        <History size={12} />
+        View activity
+      </button>
+
       {task.status === "not_started" && (
         <button
           type="button"
@@ -424,6 +446,51 @@ const TaskCard = ({ task, busy, onStart, onSubmit, onToggleSubtask }: TaskCardPr
           Well done! Approved{task.approvedBy ? ` by ${task.approvedBy.name}` : ""}.
         </div>
       )}
+      </div>
+    </div>
+  );
+};
+
+interface PercentRingProps {
+  value: number;
+  color: string;
+}
+
+const PercentRing = ({ value, color }: PercentRingProps) => {
+  const size = 56;
+  const stroke = 5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.min(100, Math.max(0, value));
+  const offset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className="transition-all duration-500"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-xs font-semibold text-slate-700">{clamped}%</span>
+      </div>
     </div>
   );
 };

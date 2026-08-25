@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Eye, FolderKanban, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Eye,
+  FileText,
+  FolderKanban,
+  GitFork,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
   createProject,
@@ -21,6 +30,8 @@ const emptyForm: ProjectFormInput = {
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
   progress: 0,
+  pdfFile: null,
+  githubLink: "",
   teamId: null,
 };
 
@@ -54,6 +65,7 @@ const Projects = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ProjectFormInput>(emptyForm);
+  const [currentPdfUrl, setCurrentPdfUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -86,6 +98,7 @@ const Projects = () => {
   const openCreateModal = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setCurrentPdfUrl(null);
     setModalOpen(true);
   };
 
@@ -99,8 +112,11 @@ const Projects = () => {
       startDate: project.startDate,
       endDate: project.endDate ?? "",
       progress: project.progress,
+      pdfFile: null,
+      githubLink: project.githubLink ?? "",
       teamId: project.teamId,
     });
+    setCurrentPdfUrl(project.pdf);
     setModalOpen(true);
   };
 
@@ -242,12 +258,38 @@ const Projects = () => {
                         </div>
 
                         <div>
-                          <Link
-                            to={`/app/projects/${project.id}`}
-                            className="text-sm font-medium text-slate-800 hover:text-blue-600 hover:underline"
-                          >
-                            {project.name}
-                          </Link>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              to={`/app/projects/${project.id}`}
+                              className="text-sm font-medium text-slate-800 hover:text-blue-600 hover:underline"
+                            >
+                              {project.name}
+                            </Link>
+                            {/* {project.githubLink && (
+                              <a
+                                href={project.githubLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-400 transition-colors hover:text-slate-700"
+                                title="GitHub repository"
+                                aria-label={`${project.name} GitHub repository`}
+                              >
+                                <GitFork size={14} />
+                              </a>
+                            )} */}
+                            {/* {project.pdf && (
+                              <a
+                                href={project.pdf}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-slate-400 transition-colors hover:text-red-600"
+                                title="Project PDF"
+                                aria-label={`${project.name} PDF`}
+                              >
+                                <FileText size={14} />
+                              </a>
+                            )} */}
+                          </div>
                           <p className="line-clamp-1 max-w-[220px] text-xs text-slate-500">
                             {project.description}
                           </p>
@@ -472,6 +514,53 @@ const Projects = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                GitHub Link
+              </label>
+              <input
+                type="url"
+                value={form.githubLink}
+                placeholder="https://github.com/org/repo"
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    githubLink: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Project PDF
+              </label>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    pdfFile: event.target.files?.[0] ?? null,
+                  }))
+                }
+                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 outline-none transition file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {currentPdfUrl && !form.pdfFile && (
+                <a
+                  href={currentPdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-xs text-blue-600 hover:underline"
+                >
+                  View current PDF
+                </a>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

@@ -20,11 +20,30 @@ export interface Task {
   assignedTo: TaskPersonRef | null;
   createdBy: TaskPersonRef | null;
   approvedBy: TaskPersonRef | null;
+  startedAt: string | null;
   submittedAt: string | null;
   approvedAt: string | null;
   subtasks: Task[];
   createdAt: string;
   updatedAt: string;
+}
+
+export type TaskActivityAction =
+  | "created"
+  | "started"
+  | "subtask_toggled"
+  | "submitted"
+  | "approved"
+  | "reassigned";
+
+export interface TaskActivity {
+  id: number;
+  action: TaskActivityAction;
+  fromStatus: TaskStatus | null;
+  toStatus: TaskStatus | null;
+  note: string | null;
+  user: TaskPersonRef | null;
+  createdAt: string;
 }
 
 export interface TaskFormInput {

@@ -10,7 +10,10 @@ import {
   ClipboardCheck,
   Download,
   Edit2,
+  FileText,
   FolderKanban,
+  GitFork,
+  History,
   ListChecks,
   Loader2,
   Plus,
@@ -21,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import Modal from "../../components/common/Modal";
+import TaskActivityModal from "../../components/tasks/TaskActivityModal";
 import {
   deleteProject,
   getProjects,
@@ -171,6 +175,7 @@ const ProjectDetail = () => {
   const [savingTask, setSavingTask] = useState(false);
   const [taskError, setTaskError] = useState("");
   const [taskActionId, setTaskActionId] = useState<number | null>(null);
+  const [activityTask, setActivityTask] = useState<Task | null>(null);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -220,6 +225,8 @@ const ProjectDetail = () => {
           startDate: found.startDate,
           endDate: found.endDate ?? "",
           progress: found.progress,
+          pdfFile: null,
+          githubLink: found.githubLink ?? "",
           teamId: found.teamId,
         });
       }
@@ -516,6 +523,7 @@ const ProjectDetail = () => {
 
     const updated = await updateProject(project.id, settingsForm);
     setProject(updated);
+    setSettingsForm((prev) => (prev ? { ...prev, pdfFile: null } : prev));
     setSavingSettings(false);
     setSettingsSaved(true);
   };
@@ -598,6 +606,28 @@ const ProjectDetail = () => {
             >
               {statusLabels[project.status]}
             </span>
+            {project.githubLink && (
+              <a
+                href={project.githubLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                title="GitHub repository"
+              >
+                <GitFork size={18} />
+              </a>
+            )}
+            {project.pdf && (
+              <a
+                href={project.pdf}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-red-600"
+                title="Project PDF"
+              >
+                <FileText size={18} />
+              </a>
+            )}
             <button
               type="button"
               onClick={handleExportCSV}
@@ -811,6 +841,7 @@ const ProjectDetail = () => {
                             )}
                             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
                               <span>Assigned to {task.assignedTo?.name ?? "Unassigned"}</span>
+                              {task.createdBy && <span>Added by {task.createdBy.name}</span>}
                               {task.subtasks.length > 0 && (
                                 <span>
                                   {completedSubtasks}/{task.subtasks.length} sub-tasks done
@@ -844,8 +875,18 @@ const ProjectDetail = () => {
                           <span className="text-xs font-medium text-slate-500">{task.progress}%</span>
                         </div>
 
-                        {canManageProjects && (
-                          <div className="mt-3 flex items-center justify-end gap-2">
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setActivityTask(task)}
+                            className="flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-600"
+                          >
+                            <History size={12} />
+                            View activity
+                          </button>
+
+                          {canManageProjects && (
+                          <div className="flex items-center justify-end gap-2">
                             {task.status === "submitted" && (
                               <button
                                 type="button"
@@ -877,7 +918,8 @@ const ProjectDetail = () => {
                               <Trash2 size={16} />
                             </button>
                           </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -1216,6 +1258,53 @@ const ProjectDetail = () => {
                   </select>
                 </div>
 
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      GitHub Link
+                    </label>
+                    <input
+                      type="url"
+                      value={settingsForm.githubLink}
+                      placeholder="https://github.com/org/repo"
+                      onChange={(event) =>
+                        setSettingsForm((prev) =>
+                          prev ? { ...prev, githubLink: event.target.value } : prev,
+                        )
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                      Project PDF
+                    </label>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(event) =>
+                        setSettingsForm((prev) =>
+                          prev
+                            ? { ...prev, pdfFile: event.target.files?.[0] ?? null }
+                            : prev,
+                        )
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 outline-none transition file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                    {project.pdf && !settingsForm.pdfFile && (
+                      <a
+                        href={project.pdf}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-block text-xs text-blue-600 hover:underline"
+                      >
+                        View current PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="submit"
@@ -1431,6 +1520,13 @@ const ProjectDetail = () => {
           </div>
         </form>
       </Modal>
+
+      <TaskActivityModal
+        open={activityTask != null}
+        onClose={() => setActivityTask(null)}
+        taskId={activityTask?.id ?? null}
+        taskTitle={activityTask?.title}
+      />
     </div>
   );
 };

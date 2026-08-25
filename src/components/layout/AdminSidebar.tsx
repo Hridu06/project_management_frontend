@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, type Role } from "../../context/AuthContext";
-import { getProjects, getMyProjectsSummary } from "../../services/projectService";
+import { getProjects } from "../../services/projectService";
 import type { Project } from "../../types/project";
 import logo from "../../assets/Nanosoft.png";
 
@@ -149,14 +149,15 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
     let cancelled = false;
 
     const load = async () => {
+      // Employees don't get the sidebar's Projects section, so skip the fetch.
+      if (user.role === "employee") {
+        setProjects([]);
+        return;
+      }
+
       try {
-        if (user.role === "employee") {
-          const summaries = await getMyProjectsSummary();
-          if (!cancelled) setProjects(summaries.map((summary) => summary.project));
-        } else {
-          const list = await getProjects();
-          if (!cancelled) setProjects(list);
-        }
+        const list = await getProjects();
+        if (!cancelled) setProjects(list);
       } catch {
         if (!cancelled) setProjects([]);
       }
@@ -291,7 +292,7 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
                 </div>
               </div>
 
-              {group.label === "Management" && (
+              {group.label === "Management" && canManageProjects && (
                 // Projects — dynamic list of created projects with per-project
                 // Tasks/Calendar/Analytics/Settings sub-menu, mirroring the
                 // product's project tabs so work can be jumped to directly.

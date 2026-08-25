@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Calendar,
+  FileText,
   FolderKanban,
+  GitFork,
   Loader2,
   Printer,
   TrendingUp,
@@ -542,12 +544,38 @@ const ProjectSummaryCard = ({ summary }: ProjectSummaryCardProps) => {
           </div>
 
           <div className="min-w-0">
-            <Link
-              to={`/app/projects/${project.id}`}
-              className="text-sm font-semibold text-slate-900 hover:text-blue-600 hover:underline"
-            >
-              {project.name}
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <Link
+                to={`/app/projects/${project.id}`}
+                className="text-sm font-semibold text-slate-900 hover:text-blue-600 hover:underline"
+              >
+                {project.name}
+              </Link>
+              {project.githubLink && (
+                <a
+                  href={project.githubLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-400 transition-colors hover:text-slate-700"
+                  title="GitHub repository"
+                  aria-label={`${project.name} GitHub repository`}
+                >
+                  <GitFork size={13} />
+                </a>
+              )}
+              {project.pdf && (
+                <a
+                  href={project.pdf}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-400 transition-colors hover:text-red-600"
+                  title="Project PDF"
+                  aria-label={`${project.name} PDF`}
+                >
+                  <FileText size={13} />
+                </a>
+              )}
+            </div>
             <p className="text-xs text-slate-500">
               {project.client || "No client"}
             </p>

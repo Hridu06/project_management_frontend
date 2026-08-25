@@ -1,5 +1,11 @@
 import { apiRequest } from "./api";
-import type { Task, TaskFormInput, TaskPersonRef, TaskUpdateInput } from "../types/task";
+import type {
+  Task,
+  TaskActivity,
+  TaskFormInput,
+  TaskPersonRef,
+  TaskUpdateInput,
+} from "../types/task";
 
 interface ApiTask {
   id: number;
@@ -14,6 +20,7 @@ interface ApiTask {
   assigned_to: TaskPersonRef | null;
   created_by: TaskPersonRef | null;
   approved_by: TaskPersonRef | null;
+  started_at: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   subtasks: ApiTask[];
@@ -30,6 +37,20 @@ interface TaskResponse {
   task: ApiTask;
 }
 
+interface ApiTaskActivity {
+  id: number;
+  action: TaskActivity["action"];
+  from_status: Task["status"] | null;
+  to_status: Task["status"] | null;
+  note: string | null;
+  user: TaskPersonRef | null;
+  created_at: string;
+}
+
+interface TaskActivityListResponse {
+  activities: ApiTaskActivity[];
+}
+
 const toTask = (data: ApiTask): Task => ({
   id: data.id,
   projectId: data.project?.id ?? null,
@@ -44,11 +65,22 @@ const toTask = (data: ApiTask): Task => ({
   assignedTo: data.assigned_to,
   createdBy: data.created_by,
   approvedBy: data.approved_by,
+  startedAt: data.started_at,
   submittedAt: data.submitted_at,
   approvedAt: data.approved_at,
   subtasks: (data.subtasks ?? []).map(toTask),
   createdAt: data.created_at,
   updatedAt: data.updated_at,
+});
+
+const toTaskActivity = (data: ApiTaskActivity): TaskActivity => ({
+  id: data.id,
+  action: data.action,
+  fromStatus: data.from_status,
+  toStatus: data.to_status,
+  note: data.note,
+  user: data.user,
+  createdAt: data.created_at,
 });
 
 export interface TaskFilters {
@@ -138,4 +170,9 @@ export const toggleSubtask = async (taskId: number, subtaskId: number): Promise<
   );
 
   return toTask(data.task);
+};
+
+export const getTaskActivities = async (taskId: number): Promise<TaskActivity[]> => {
+  const data = await apiRequest<TaskActivityListResponse>(`/tasks/${taskId}/activities`);
+  return data.activities.map(toTaskActivity);
 };
