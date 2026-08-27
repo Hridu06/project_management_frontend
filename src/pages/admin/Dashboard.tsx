@@ -1,43 +1,54 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarCheck,
-  Clock3,
   FolderKanban,
   Loader2,
-  UserCheck,
   Users,
-  UserX,
   ChartBar,
+  ClipboardList,
   CheckCircle2,
-  AlertCircle,
+  ListChecks,
   Clock,
-  PlusCircle,
-  MoreVertical,
-  Calendar,
-  TrendingUp,
-  Briefcase,
+  AlertCircle,
 } from "lucide-react";
 import { getEmployees } from "../../services/employeeService";
 import { getProjects } from "../../services/projectService";
-import { getContributions } from "../../services/contributionService";
-import {
-  getAttendanceRecords,
-  formatDuration,
-} from "../../services/attendanceService";
-import { getLeaveRequests } from "../../services/leaveService";
+import { getTasks } from "../../services/taskService";
 import type { Employee } from "../../types/employee";
 import type { Project } from "../../types/project";
-import type { AttendanceRecord, Contribution } from "../../types/attendance";
-import type { LeaveRequest } from "../../types/leave";
+import type { Task, TaskPriority, TaskStatus } from "../../types/task";
+
+const statusStyles: Record<TaskStatus, string> = {
+  not_started: "bg-slate-100 text-slate-500",
+  in_progress: "bg-amber-50 text-amber-600",
+  submitted: "bg-blue-50 text-blue-600",
+  completed: "bg-emerald-50 text-emerald-600",
+};
+
+const statusLabels: Record<TaskStatus, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  submitted: "Waiting for Review",
+  completed: "Approved",
+};
+
+const priorityStyles: Record<TaskPriority, string> = {
+  low: "bg-slate-100 text-slate-500",
+  medium: "bg-amber-50 text-amber-600",
+  high: "bg-red-50 text-red-600",
+  urgent: "bg-red-100 text-red-700",
+};
+
+const priorityLabels: Record<TaskPriority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  urgent: "Urgent",
+};
 
 const Dashboard = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<
-    AttendanceRecord[]
-  >([]);
-  const [contributions, setContributions] = useState<Contribution[]>([]);
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<string>("all");
 
@@ -47,22 +58,17 @@ const Dashboard = () => {
     const load = async () => {
       setLoading(true);
 
-      const [employeeData, projectData, attendanceData, contributionData, leaveData] =
-        await Promise.all([
-          getEmployees(),
-          getProjects(),
-          getAttendanceRecords(),
-          getContributions(),
-          getLeaveRequests(),
-        ]);
+      const [employeeData, projectData, taskData] = await Promise.all([
+        getEmployees(),
+        getProjects(),
+        getTasks(),
+      ]);
 
       if (cancelled) return;
 
       setEmployees(employeeData);
       setProjects(projectData);
-      setAttendanceRecords(attendanceData);
-      setContributions(contributionData);
-      setLeaveRequests(leaveData);
+      setTasks(taskData);
       setLoading(false);
     };
 
@@ -72,28 +78,6 @@ const Dashboard = () => {
       cancelled = true;
     };
   }, []);
-
-  const employeeMap = useMemo(
-    () => new Map(employees.map((employee) => [employee.id, employee])),
-    [employees],
-  );
-
-  const projectMap = useMemo(
-    () => new Map(projects.map((project) => [String(project.id), project])),
-    [projects],
-  );
-
-  const latestDate = useMemo(() => {
-    return attendanceRecords.reduce<string | null>((latest, record) => {
-      if (!latest || record.date > latest) return record.date;
-      return latest;
-    }, null);
-  }, [attendanceRecords]);
-
-  const todaysRecords = useMemo(
-    () => attendanceRecords.filter((record) => record.date === latestDate),
-    [attendanceRecords, latestDate],
-  );
 
   const activeEmployees = useMemo(
     () => employees.filter((employee) => employee.status === "active"),
@@ -110,78 +94,56 @@ const Dashboard = () => {
     [projects],
   );
 
-  const onLeaveToday = useMemo(() => {
-    if (!latestDate) return 0;
+  const notStartedCount = tasks.filter((task) => task.status === "not_started").length;
+  const inProgressCount = tasks.filter((task) => task.status === "in_progress").length;
+  const submittedCount = tasks.filter((task) => task.status === "submitted").length;
+  const completedCount = tasks.filter((task) => task.status === "completed").length;
 
-    return leaveRequests.filter(
-      (leave) =>
-        leave.status === "approved" &&
-        leave.startDate <= latestDate &&
-        leave.endDate >= latestDate,
-    ).length;
-  }, [leaveRequests, latestDate]);
-
-  const presentCount = todaysRecords.filter(
-    (record) => record.status === "present",
-  ).length;
-
-  const halfDayCount = todaysRecords.filter(
-    (record) => record.status === "half-day",
-  ).length;
-
-  const lateCount = todaysRecords.filter(
-    (record) => record.status === "late",
-  ).length;
-
-  const absentCount = Math.max(
-    activeEmployees.length - todaysRecords.length - onLeaveToday,
-    0,
-  );
+  const lowPriorityCount = tasks.filter((task) => task.priority === "low").length;
+  const mediumPriorityCount = tasks.filter((task) => task.priority === "medium").length;
+  const highPriorityCount = tasks.filter((task) => task.priority === "high").length;
+  const urgentPriorityCount = tasks.filter((task) => task.priority === "urgent").length;
 
   // Project Statistics
   const projectStats = useMemo(() => {
-    return activeProjects.map(project => {
-      const projectContributions = contributions.filter(
-        c => c.projectId === String(project.id)
-      );
-      
-      const uniqueEmployees = new Set(
-        projectContributions.map(c => c.employeeId)
+    return activeProjects.map((project) => {
+      const projectTasks = tasks.filter((task) => task.projectId === project.id);
+
+      const uniqueAssignees = new Set(
+        projectTasks.map((task) => task.assignedTo?.id).filter((id) => id != null),
       );
 
-      const totalHours = projectContributions.reduce((total, c) => {
-        const [startHour, startMinute] = c.startTime.split(":").map(Number);
-        const [endHour, endMinute] = c.endTime.split(":").map(Number);
-        const durationMinutes = endHour * 60 + endMinute - (startHour * 60 + startMinute);
-        return total + Math.max(durationMinutes, 0);
-      }, 0);
+      const completedTasks = projectTasks.filter(
+        (task) => task.status === "completed",
+      ).length;
+
+      const avgProgress = projectTasks.length
+        ? Math.round(
+            projectTasks.reduce((total, task) => total + task.progress, 0) /
+              projectTasks.length,
+          )
+        : 0;
 
       return {
         ...project,
-        totalContributors: uniqueEmployees.size,
-        totalHours: Math.round(totalHours / 60),
-        totalContributions: projectContributions.length,
+        totalContributors: uniqueAssignees.size,
+        totalTasks: projectTasks.length,
+        completedTasks,
+        avgProgress,
       };
     });
-  }, [activeProjects, contributions]);
+  }, [activeProjects, tasks]);
 
-  const totalProjectHours = useMemo(() => {
-    return projectStats.reduce((total, p) => total + p.totalHours, 0);
-  }, [projectStats]);
-
-  const recentContributions = useMemo(
-    () =>
-      [...contributions]
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 5),
-    [contributions],
+  const recentTasks = useMemo(
+    () => [...tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
+    [tasks],
   );
 
-  // Filter contributions by selected project
-  const filteredContributions = useMemo(() => {
-    if (selectedProject === "all") return recentContributions;
-    return recentContributions.filter(c => c.projectId === selectedProject);
-  }, [recentContributions, selectedProject]);
+  // Filter recent tasks by selected project
+  const filteredTasks = useMemo(() => {
+    if (selectedProject === "all") return recentTasks;
+    return recentTasks.filter((task) => String(task.projectId) === selectedProject);
+  }, [recentTasks, selectedProject]);
 
   if (loading) {
     return (
@@ -200,7 +162,7 @@ const Dashboard = () => {
         </h1>
 
         <p className="mt-1 text-sm text-slate-500">
-          Overview of all projects, team performance, and attendance
+          Overview of all projects, team performance, and task activity
         </p>
       </div>
 
@@ -225,29 +187,29 @@ const Dashboard = () => {
         />
 
         <SummaryCard
-          title="Total Hours"
-          value={`${totalProjectHours}h`}
-          subtitle="Across all projects"
-          icon={<Clock3 size={22} />}
+          title="Total Tasks"
+          value={String(tasks.length)}
+          subtitle={`${completedCount} completed`}
+          icon={<ClipboardList size={22} />}
           iconBg="bg-amber-50"
           iconColor="text-amber-600"
         />
 
         <SummaryCard
-          title="Present Today"
-          value={String(presentCount)}
+          title="Completed Tasks"
+          value={String(completedCount)}
           subtitle={
-            activeEmployees.length > 0
-              ? `${((presentCount / activeEmployees.length) * 100).toFixed(1)}% attendance`
-              : "No active employees"
+            tasks.length > 0
+              ? `${((completedCount / tasks.length) * 100).toFixed(1)}% completion rate`
+              : "No tasks yet"
           }
-          icon={<UserCheck size={22} />}
+          icon={<CheckCircle2 size={22} />}
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
         />
       </div>
 
-      {/* Project Progress & Attendance Grid */}
+      {/* Project Progress & Task Status Grid */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Project Progress */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 xl:col-span-2">
@@ -257,7 +219,7 @@ const Dashboard = () => {
                 Project Progress
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Active projects and their contribution
+                Active projects and their task completion
               </p>
             </div>
             <ChartBar size={21} className="shrink-0 text-slate-400" />
@@ -269,109 +231,100 @@ const Dashboard = () => {
                 No active projects
               </div>
             )}
-            {projectStats.slice(0, 4).map((project) => {
-              const progress = Math.min((project.totalContributions / 100) * 100, 100);
-              
-              return (
-                <div key={project.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium text-slate-800 truncate">
-                        {project.name}
-                      </span>
-                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">
-                        {project.totalContributors} members
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-slate-900 shrink-0 ml-2">
-                      {project.totalHours}h
+            {projectStats.slice(0, 4).map((project) => (
+              <div key={project.id} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-slate-800 truncate">
+                      {project.name}
+                    </span>
+                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">
+                      {project.totalContributors} members
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500"
-                      style={{ width: `${Math.min(progress, 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-slate-400">
-                    <span>{project.totalContributions} contributions</span>
-                    <span>{progress.toFixed(0)}% progress</span>
-                  </div>
+                  <span className="text-sm font-semibold text-slate-900 shrink-0 ml-2">
+                    {project.completedTasks}/{project.totalTasks} done
+                  </span>
                 </div>
-              );
-            })}
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+                    style={{ width: `${project.avgProgress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>{project.totalTasks} tasks</span>
+                  <span>{project.avgProgress}% progress</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Attendance Overview */}
+        {/* Task Status Overview */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">
-                Attendance
+                Task Status
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Today's status
+                Across all projects
               </p>
             </div>
-            <CalendarCheck size={21} className="shrink-0 text-slate-400" />
+            <ListChecks size={21} className="shrink-0 text-slate-400" />
           </div>
 
           <div className="mt-6 space-y-3">
-            <AttendanceItem
-              label="Present"
-              value={String(presentCount)}
-              color="bg-emerald-500"
+            <StatusItem
+              label="Not Started"
+              value={String(notStartedCount)}
+              color="bg-slate-400"
             />
-            <AttendanceItem
-              label="Half Day"
-              value={String(halfDayCount)}
+            <StatusItem
+              label="In Progress"
+              value={String(inProgressCount)}
               color="bg-amber-500"
             />
-            <AttendanceItem
-              label="Late"
-              value={String(lateCount)}
-              color="bg-orange-500"
-            />
-            <AttendanceItem
-              label="Absent"
-              value={String(absentCount)}
-              color="bg-red-500"
-            />
-            <AttendanceItem
-              label="On Leave"
-              value={String(onLeaveToday)}
+            <StatusItem
+              label="Waiting for Review"
+              value={String(submittedCount)}
               color="bg-blue-500"
+            />
+            <StatusItem
+              label="Approved"
+              value={String(completedCount)}
+              color="bg-emerald-500"
             />
           </div>
         </div>
       </div>
 
-      {/* Quick Stats Row */}
+      {/* Quick Stats Row - Priority Breakdown */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <QuickStat
-          icon={<UserCheck className="text-emerald-500" size={18} />}
-          label="Present"
-          value={String(presentCount)}
+          icon={<CheckCircle2 className="text-emerald-500" size={18} />}
+          label="Low Priority"
+          value={String(lowPriorityCount)}
           color="emerald"
         />
         <QuickStat
-          icon={<Clock className="text-orange-500" size={18} />}
-          label="Late"
-          value={String(lateCount)}
+          icon={<Clock className="text-amber-500" size={18} />}
+          label="Medium Priority"
+          value={String(mediumPriorityCount)}
+          color="amber"
+        />
+        <QuickStat
+          icon={<AlertCircle className="text-orange-500" size={18} />}
+          label="High Priority"
+          value={String(highPriorityCount)}
           color="orange"
         />
         <QuickStat
           icon={<AlertCircle className="text-red-500" size={18} />}
-          label="Absent"
-          value={String(absentCount)}
+          label="Urgent Priority"
+          value={String(urgentPriorityCount)}
           color="red"
-        />
-        <QuickStat
-          icon={<Calendar className="text-blue-500" size={18} />}
-          label="On Leave"
-          value={String(onLeaveToday)}
-          color="blue"
         />
       </div>
 
@@ -384,10 +337,10 @@ const Dashboard = () => {
                 Recent Contributions
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Latest project activities
+                Latest task activity
               </p>
             </div>
-            
+
             {/* Project Filter */}
             <select
               value={selectedProject}
@@ -404,66 +357,74 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Employee
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Project
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Task
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Duration
-                </th>
-                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Status
-                </th>
-              </tr>
-            </thead>
+        {filteredTasks.length === 0 && (
+          <div className="px-6 py-8 text-center text-sm text-slate-400">
+            No recent contributions found.
+          </div>
+        )}
 
-            <tbody>
-              {filteredContributions.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-8 text-center text-sm text-slate-400"
-                  >
-                    No recent contributions found.
-                  </td>
+        {/* Mobile card list */}
+        {filteredTasks.length > 0 && (
+          <div className="divide-y divide-slate-100 md:hidden">
+            {filteredTasks.map((task) => (
+              <ActivityCard
+                key={task.id}
+                employee={task.assignedTo?.name || "Unassigned"}
+                initial={(task.assignedTo?.name || "?").charAt(0).toUpperCase()}
+                project={task.projectName || "Unknown"}
+                task={task.title}
+                priority={task.priority}
+                status={task.status}
+                progress={task.progress}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Desktop table */}
+        {filteredTasks.length > 0 && (
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Employee
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Project
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Task
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Priority
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Progress
+                  </th>
                 </tr>
-              )}
+              </thead>
 
-              {filteredContributions.map((contribution) => {
-                const employee = employeeMap.get(contribution.employeeId);
-                const project = projectMap.get(contribution.projectId);
-                const [startHour, startMinute] = contribution.startTime
-                  .split(":")
-                  .map(Number);
-                const [endHour, endMinute] = contribution.endTime
-                  .split(":")
-                  .map(Number);
-                const durationMinutes =
-                  endHour * 60 + endMinute - (startHour * 60 + startMinute);
-
-                return (
+              <tbody>
+                {filteredTasks.map((task) => (
                   <ActivityRow
-                    key={contribution.id}
-                    employee={employee?.name || "Unknown"}
-                    initial={(employee?.name || "?").charAt(0).toUpperCase()}
-                    project={project?.name || "Unknown"}
-                    task={contribution.task}
-                    duration={formatDuration(Math.max(durationMinutes, 0))}
+                    key={task.id}
+                    employee={task.assignedTo?.name || "Unassigned"}
+                    initial={(task.assignedTo?.name || "?").charAt(0).toUpperCase()}
+                    project={task.projectName || "Unknown"}
+                    task={task.title}
+                    priority={task.priority}
+                    status={task.status}
+                    progress={task.progress}
                   />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -479,7 +440,7 @@ interface SummaryCardProps {
   iconColor: string;
 }
 
-interface AttendanceItemProps {
+interface StatusItemProps {
   label: string;
   value: string;
   color: string;
@@ -497,7 +458,9 @@ interface ActivityRowProps {
   initial: string;
   project: string;
   task: string;
-  duration: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  progress: number;
 }
 
 // Component Definitions
@@ -525,7 +488,7 @@ const SummaryCard = ({
   );
 };
 
-const AttendanceItem = ({ label, value, color }: AttendanceItemProps) => {
+const StatusItem = ({ label, value, color }: StatusItemProps) => {
   return (
     <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-2.5">
       <div className="flex items-center gap-2">
@@ -540,9 +503,9 @@ const AttendanceItem = ({ label, value, color }: AttendanceItemProps) => {
 const QuickStat = ({ icon, label, value, color }: QuickStatProps) => {
   const colorClasses = {
     emerald: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600",
     orange: "bg-orange-50 text-orange-600",
     red: "bg-red-50 text-red-600",
-    blue: "bg-blue-50 text-blue-600",
   };
 
   return (
@@ -558,12 +521,77 @@ const QuickStat = ({ icon, label, value, color }: QuickStatProps) => {
   );
 };
 
+const ActivityCard = ({
+  employee,
+  initial,
+  project,
+  task,
+  priority,
+  status,
+  progress,
+}: ActivityRowProps) => {
+  return (
+    <div className="px-4 py-4 sm:px-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-600">
+            {initial}
+          </div>
+          <span className="truncate text-sm font-medium text-slate-800">
+            {employee}
+          </span>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[status]}`}
+        >
+          {statusLabels[status]}
+        </span>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+        <div>
+          <dt className="text-xs text-slate-400">Project</dt>
+          <dd className="mt-0.5 truncate text-slate-600">{project}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-400">Priority</dt>
+          <dd className="mt-0.5">
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${priorityStyles[priority]}`}
+            >
+              {priorityLabels[priority]}
+            </span>
+          </dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-xs text-slate-400">Task</dt>
+          <dd className="mt-0.5 text-slate-600">{task}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-xs text-slate-400">Progress</dt>
+          <dd className="mt-1 flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-blue-600"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-slate-600">{progress}%</span>
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+};
+
 const ActivityRow = ({
   employee,
   initial,
   project,
   task,
-  duration,
+  priority,
+  status,
+  progress,
 }: ActivityRowProps) => {
   return (
     <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
@@ -577,12 +605,30 @@ const ActivityRow = ({
       </td>
       <td className="px-6 py-4 text-sm text-slate-600">{project}</td>
       <td className="px-6 py-4 text-sm text-slate-600">{task}</td>
-      <td className="px-6 py-4 text-sm font-medium text-slate-700">{duration}</td>
       <td className="px-6 py-4">
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          Active
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityStyles[priority]}`}
+        >
+          {priorityLabels[priority]}
         </span>
+      </td>
+      <td className="px-6 py-4">
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[status]}`}
+        >
+          {statusLabels[status]}
+        </span>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-blue-600"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-xs font-medium text-slate-600">{progress}%</span>
+        </div>
       </td>
     </tr>
   );
