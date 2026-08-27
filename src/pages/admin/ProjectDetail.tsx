@@ -26,12 +26,12 @@ import {
 import Modal from "../../components/common/Modal";
 import TaskActivityModal from "../../components/tasks/TaskActivityModal";
 import {
-  deleteProject,
-  getProjects,
-  updateProject,
-} from "../../services/projectService";
+  useDeleteProjectMutation,
+  useProjectsQuery,
+  useUpdateProjectMutation,
+} from "../../hooks/useProjectQueries";
+import { useTeamsQuery } from "../../hooks/useTeamQueries";
 import { getEmployees } from "../../services/employeeService";
-import { getTeamList } from "../../services/teamService";
 import {
   approveTask,
   createTask,
@@ -40,9 +40,8 @@ import {
   updateTask,
 } from "../../services/taskService";
 import { useAuth } from "../../context/AuthContext";
-import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
+import type { ProjectFormInput, ProjectStatus } from "../../types/project";
 import type { Employee } from "../../types/employee";
-import type { Team } from "../../types/team";
 import type { UserRole } from "../../types/user";
 import type { Task, TaskFormInput, TaskPriority } from "../../types/task";
 
@@ -139,11 +138,20 @@ const ProjectDetail = () => {
   // deleting the project stays admin-only. Employees get a read-only view.
   const canManageProjects = isAdmin || user?.role === "manager";
 
-  const [project, setProject] = useState<Project | null>(null);
+  const projectsQuery = useProjectsQuery();
+  const teamsQuery = useTeamsQuery();
+  const updateProjectMutation = useUpdateProjectMutation();
+  const deleteProjectMutation = useDeleteProjectMutation();
+
+  const teams = teamsQuery.data ?? [];
+  const project = useMemo(
+    () => projectsQuery.data?.find((item) => String(item.id) === projectId) ?? null,
+    [projectsQuery.data, projectId],
+  );
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const loading = projectsQuery.isLoading || teamsQuery.isLoading || tasksLoading;
 
   // The active tab is driven by the ?tab= query param (not local state) so
   // the sidebar's per-project sub-menu links can deep-link straight to a tab.
@@ -200,40 +208,40 @@ const ProjectDetail = () => {
     const load = async () => {
       if (!projectId) return;
 
-      const [projectList, employeeList, teamList, taskList] =
-        await Promise.all([
-          getProjects(),
-          getEmployees(),
-          getTeamList(),
-          getTasks({ projectId: Number(projectId) }),
-        ]);
+      setTasksLoading(true);
+      const [employeeList, taskList] = await Promise.all([
+        getEmployees(),
+        getTasks({ projectId: Number(projectId) }),
+      ]);
 
-      const found =
-        projectList.find((item) => String(item.id) === projectId) ?? null;
-      setProject(found);
       setEmployees(employeeList);
-      setTeams(teamList);
       setTasks(taskList);
-      setLoading(false);
-
-      if (found) {
-        setSettingsForm({
-          name: found.name,
-          client: found.client ?? "",
-          description: found.description,
-          status: found.status,
-          startDate: found.startDate,
-          endDate: found.endDate ?? "",
-          progress: found.progress,
-          pdfFile: null,
-          githubLink: found.githubLink ?? "",
-          teamId: found.teamId,
-        });
-      }
+      setTasksLoading(false);
     };
 
     load();
   }, [projectId]);
+
+  // Seed the settings form once the project loads. Keyed on project.id
+  // (not the whole object) so a background refetch of the shared projects
+  // cache doesn't clobber an in-progress edit — only switching projects does.
+  useEffect(() => {
+    if (!project) return;
+
+    setSettingsForm({
+      name: project.name,
+      client: project.client ?? "",
+      description: project.description,
+      status: project.status,
+      startDate: project.startDate,
+      endDate: project.endDate ?? "",
+      progress: project.progress,
+      pdfFile: null,
+      githubLink: project.githubLink ?? "",
+      teamId: project.teamId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id]);
 
   // Project membership comes from the linked team's members (Users), which
   // are matched back to Employee records by email — the two tables aren't
@@ -521,8 +529,7 @@ const ProjectDetail = () => {
     setSavingSettings(true);
     setSettingsSaved(false);
 
-    const updated = await updateProject(project.id, settingsForm);
-    setProject(updated);
+    await updateProjectMutation.mutateAsync({ id: project.id, input: settingsForm });
     setSettingsForm((prev) => (prev ? { ...prev, pdfFile: null } : prev));
     setSavingSettings(false);
     setSettingsSaved(true);
@@ -537,7 +544,7 @@ const ProjectDetail = () => {
     if (!confirmed) return;
 
     setDeleting(true);
-    await deleteProject(project.id);
+    await deleteProjectMutation.mutateAsync(project.id);
     navigate("/app/projects");
   };
 

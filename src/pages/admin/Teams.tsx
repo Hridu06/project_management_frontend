@@ -1,17 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Eye, Pencil, Plus, Search, Trash2, Users2 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
-  createTeam,
-  deleteTeam,
-  getAssignableUsers,
-  getTeamList,
-  updateTeam,
-} from "../../services/teamService";
+  useAssignableUsersQuery,
+  useCreateTeamMutation,
+  useDeleteTeamMutation,
+  useTeamsQuery,
+  useUpdateTeamMutation,
+} from "../../hooks/useTeamQueries";
 import { useAuth } from "../../context/AuthContext";
 import type {
   Team,
-  TeamAssignableUser,
   TeamFormInput,
   TeamMemberRole,
 } from "../../types/team";
@@ -41,10 +40,20 @@ const Teams = () => {
   // admin-only.
   const canManageTeams = isAdmin || isManager;
 
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [users, setUsers] = useState<TeamAssignableUser[]>([]);
-  const [managers, setManagers] = useState<TeamAssignableUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const teamsQuery = useTeamsQuery();
+  const assignableUsersQuery = useAssignableUsersQuery(canManageTeams);
+  const createTeamMutation = useCreateTeamMutation();
+  const updateTeamMutation = useUpdateTeamMutation();
+  const deleteTeamMutation = useDeleteTeamMutation();
+
+  const teams = teamsQuery.data ?? [];
+  const users = assignableUsersQuery.data ?? [];
+  const managers = useMemo(
+    () => users.filter((item) => item.role === "manager"),
+    [users],
+  );
+  const loading =
+    teamsQuery.isLoading || (canManageTeams && assignableUsersQuery.isLoading);
   const [search, setSearch] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -55,31 +64,6 @@ const Teams = () => {
 
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewingTeam, setViewingTeam] = useState<Team | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      // Employees only get the read-only team list — /teams/assignable-users
-      // is admin/manager-only, so skip it entirely rather than eating an
-      // avoidable 403.
-      if (!canManageTeams) {
-        setTeams(await getTeamList());
-        setLoading(false);
-        return;
-      }
-
-      const [teamList, assignableUsers] = await Promise.all([
-        getTeamList(),
-        getAssignableUsers(),
-      ]);
-
-      setTeams(teamList);
-      setUsers(assignableUsers);
-      setManagers(assignableUsers.filter((item) => item.role === "manager"));
-      setLoading(false);
-    };
-
-    load();
-  }, [canManageTeams]);
 
   const filteredTeams = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -138,13 +122,9 @@ const Teams = () => {
 
     try {
       if (editingId) {
-        const updated = await updateTeam(editingId, form);
-        setTeams((prev) =>
-          prev.map((team) => (team.id === editingId ? updated : team)),
-        );
+        await updateTeamMutation.mutateAsync({ id: editingId, input: form });
       } else {
-        const created = await createTeam(form);
-        setTeams((prev) => [created, ...prev]);
+        await createTeamMutation.mutateAsync(form);
       }
 
       setModalOpen(false);
@@ -164,8 +144,7 @@ const Teams = () => {
 
     if (!confirmed) return;
 
-    await deleteTeam(team.id);
-    setTeams((prev) => prev.filter((item) => item.id !== team.id));
+    await deleteTeamMutation.mutateAsync(team.id);
   };
 
   return (

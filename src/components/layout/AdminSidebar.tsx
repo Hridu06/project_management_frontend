@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -22,8 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, type Role } from "../../context/AuthContext";
-import { getProjects } from "../../services/projectService";
-import type { Project } from "../../types/project";
+import { useProjectsQuery } from "../../hooks/useProjectQueries";
 import logo from "../../assets/Nanosoft.png";
 
 type ProjectTabId = "tasks" | "calendar" | "analytics" | "settings";
@@ -144,37 +143,16 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
   const location = useLocation();
   const canManageProjects = user?.role === "admin" || user?.role === "manager";
 
-  const [projects, setProjects] = useState<Project[]>([]);
   const [expandedProjectId, setExpandedProjectId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!user) {
-      setProjects([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      // Employees don't get the sidebar's Projects section, so skip the fetch.
-      if (user.role === "employee") {
-        setProjects([]);
-        return;
-      }
-
-      try {
-        const list = await getProjects();
-        if (!cancelled) setProjects(list);
-      } catch {
-        if (!cancelled) setProjects([]);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+  // Employees don't get the sidebar's Projects section, so skip the fetch —
+  // this also shares its cache with the Projects/ProjectDetail pages, so
+  // switching between them doesn't refire the request.
+  const projectsQuery = useProjectsQuery(!!user && user.role !== "employee");
+  const projects = useMemo(
+    () => (user && user.role !== "employee" ? projectsQuery.data ?? [] : []),
+    [user, projectsQuery.data],
+  );
 
   // Auto-expand the project whose detail page is currently open.
   useEffect(() => {
