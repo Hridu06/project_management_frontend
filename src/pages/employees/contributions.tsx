@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { ClipboardList, Printer, Search } from "lucide-react";
-import { getTasks } from "../../services/taskService";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { ClipboardList, Plus, Printer, Search } from "lucide-react";
+import { contributeTask, getTasks } from "../../services/taskService";
+import { getProjects } from "../../services/projectService";
 import { useAuth } from "../../context/AuthContext";
+import Modal from "../../components/common/Modal";
 import type { Task, TaskPriority, TaskStatus } from "../../types/task";
 
 const statusFilters: Array<{ value: "all" | TaskStatus; label: string }> = [
@@ -10,6 +12,7 @@ const statusFilters: Array<{ value: "all" | TaskStatus; label: string }> = [
   { value: "in_progress", label: "In Progress" },
   { value: "submitted", label: "Waiting for Review" },
   { value: "completed", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
 ];
 
 const statusStyles: Record<TaskStatus, string> = {
@@ -17,6 +20,7 @@ const statusStyles: Record<TaskStatus, string> = {
   in_progress: "bg-amber-50 text-amber-600",
   submitted: "bg-blue-50 text-blue-600",
   completed: "bg-emerald-50 text-emerald-600",
+  rejected: "bg-red-50 text-red-600",
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -24,6 +28,7 @@ const statusLabels: Record<TaskStatus, string> = {
   in_progress: "In Progress",
   submitted: "Waiting for Review",
   completed: "Approved",
+  rejected: "Rejected",
 };
 
 const priorityStyles: Record<TaskPriority, string> = {
@@ -196,6 +201,11 @@ const printStyles = `
       color: #065f46 !important;
     }
 
+    .print-status-badge.rejected {
+      background: #fee2e2 !important;
+      color: #b91c1c !important;
+    }
+
     .print-priority-badge {
       display: inline-block !important;
       padding: 2px 8px !important;
@@ -243,6 +253,8 @@ const printStyles = `
 // Employees only ever see their own contributions — getTasks() is already
 // scoped to the signed-in user on the backend for this role, so there's no
 // employee picker here (unlike the admin/manager Contributions page).
+const emptyContributionForm = { projectId: 0, title: "", description: "" };
+
 const EmployeeContributions = () => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -254,15 +266,52 @@ const EmployeeContributions = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
+  const [allProjects, setAllProjects] = useState<Array<{ id: number; name: string }>>([]);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState(emptyContributionForm);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [submittingContribution, setSubmittingContribution] = useState(false);
+
   useEffect(() => {
     const load = async () => {
-      const taskList = await getTasks();
+      const [taskList, projectList] = await Promise.all([getTasks(), getProjects()]);
       setTasks(taskList);
+      setAllProjects(projectList.map((project) => ({ id: project.id, name: project.name })));
       setLoading(false);
     };
 
     load();
   }, []);
+
+  const openAddModal = () => {
+    setAddForm(emptyContributionForm);
+    setAddError(null);
+    setAddModalOpen(true);
+  };
+
+  const handleAddContribution = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!addForm.projectId) {
+      setAddError("Please select a project.");
+      return;
+    }
+
+    setSubmittingContribution(true);
+    setAddError(null);
+    try {
+      const created = await contributeTask({
+        projectId: addForm.projectId,
+        title: addForm.title,
+        description: addForm.description,
+      });
+      setTasks((prev) => [created, ...prev]);
+      setAddModalOpen(false);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Failed to submit contribution.");
+    } finally {
+      setSubmittingContribution(false);
+    }
+  };
 
   // Built from the employee's own tasks (not a separate /projects call) so
   // the filter never lists projects they aren't actually working on — the
@@ -298,6 +347,7 @@ const EmployeeContributions = () => {
   const inProgressCount = filteredTasks.filter((task) => task.status === "in_progress").length;
   const submittedCount = filteredTasks.filter((task) => task.status === "submitted").length;
   const completedCount = filteredTasks.filter((task) => task.status === "completed").length;
+  const rejectedCount = filteredTasks.filter((task) => task.status === "rejected").length;
 
   const handlePrint = () => window.print();
 
@@ -317,14 +367,25 @@ const EmployeeContributions = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handlePrint}
-          className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          <Printer size={16} />
-          Print
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <Printer size={16} />
+            Print
+          </button>
+
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus size={16} />
+            Add Contribution
+          </button>
+        </div>
       </div>
 
       {/* Print-only header */}
@@ -368,12 +429,13 @@ const EmployeeContributions = () => {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5 print:hidden">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-6 print:hidden">
         <StatCard label="Total" value={totalTasks} color="text-slate-900" />
         <StatCard label="Not Started" value={notStartedCount} color="text-slate-500" dot="bg-slate-400" />
         <StatCard label="In Progress" value={inProgressCount} color="text-amber-600" dot="bg-amber-500" />
         <StatCard label="Waiting Review" value={submittedCount} color="text-blue-600" dot="bg-blue-500" />
         <StatCard label="Approved" value={completedCount} color="text-emerald-600" dot="bg-emerald-500" />
+        <StatCard label="Rejected" value={rejectedCount} color="text-red-600" dot="bg-red-500" />
       </div>
 
       {/* Filters */}
@@ -599,6 +661,87 @@ const EmployeeContributions = () => {
         </div>
       )}
       </div>
+
+      <Modal open={addModalOpen} onClose={() => setAddModalOpen(false)} title="Add Contribution">
+        <form className="space-y-4" onSubmit={handleAddContribution}>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Project <span className="text-red-500">*</span>
+            </label>
+            <select
+              required
+              value={addForm.projectId || ""}
+              onChange={(event) =>
+                setAddForm((prev) => ({ ...prev, projectId: Number(event.target.value) }))
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">Select project</option>
+              {allProjects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              What did you do? <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              type="text"
+              value={addForm.title}
+              onChange={(event) =>
+                setAddForm((prev) => ({ ...prev, title: event.target.value }))
+              }
+              placeholder="e.g. Fixed the login redirect bug"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Description
+            </label>
+            <textarea
+              rows={3}
+              value={addForm.description}
+              onChange={(event) =>
+                setAddForm((prev) => ({ ...prev, description: event.target.value }))
+              }
+              placeholder="Any extra detail for your manager to review"
+              className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          <p className="text-xs text-slate-400">
+            This will be submitted straight to your manager/admin for review — no need to
+            start/submit it manually.
+          </p>
+
+          {addError && <p className="text-sm text-red-600">{addError}</p>}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setAddModalOpen(false)}
+              className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={submittingContribution}
+              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+            >
+              {submittingContribution ? "Submitting..." : "Submit for Review"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 };

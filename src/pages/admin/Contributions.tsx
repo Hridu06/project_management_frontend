@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardList, Download, Search } from "lucide-react";
-import { getTasks } from "../../services/taskService";
+import { CheckCircle2, ClipboardList, Download, Search, XCircle } from "lucide-react";
+import { approveTask, getTasks, rejectTask } from "../../services/taskService";
 import { getProjects } from "../../services/projectService";
 import type { Task, TaskPriority, TaskStatus } from "../../types/task";
 import type { Project } from "../../types/project";
@@ -11,6 +11,7 @@ const statusFilters: Array<{ value: "all" | TaskStatus; label: string }> = [
   { value: "in_progress", label: "In Progress" },
   { value: "submitted", label: "Waiting for Review" },
   { value: "completed", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
 ];
 
 const statusStyles: Record<TaskStatus, string> = {
@@ -18,6 +19,7 @@ const statusStyles: Record<TaskStatus, string> = {
   in_progress: "bg-amber-50 text-amber-600",
   submitted: "bg-blue-50 text-blue-600",
   completed: "bg-emerald-50 text-emerald-600",
+  rejected: "bg-red-50 text-red-600",
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -25,6 +27,7 @@ const statusLabels: Record<TaskStatus, string> = {
   in_progress: "In Progress",
   submitted: "Waiting for Review",
   completed: "Approved",
+  rejected: "Rejected",
 };
 
 const priorityStyles: Record<TaskPriority, string> = {
@@ -52,6 +55,7 @@ const Contributions = () => {
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [actionTaskId, setActionTaskId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -64,6 +68,33 @@ const Contributions = () => {
 
     load();
   }, []);
+
+  const handleApprove = async (task: Task) => {
+    setActionTaskId(task.id);
+    try {
+      const updated = await approveTask(task.id);
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? updated : item)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to approve task.");
+    } finally {
+      setActionTaskId(null);
+    }
+  };
+
+  const handleReject = async (task: Task) => {
+    const reason = window.prompt(`Reject "${task.title}"? Add an optional reason:`);
+    if (reason === null) return;
+
+    setActionTaskId(task.id);
+    try {
+      const updated = await rejectTask(task.id, reason.trim() || undefined);
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? updated : item)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to reject task.");
+    } finally {
+      setActionTaskId(null);
+    }
+  };
 
   // Tasks are assigned to Users, which don't share an id space with the
   // Employee directory — the assignee filter is built from the tasks
@@ -103,6 +134,7 @@ const Contributions = () => {
   const inProgressCount = filteredTasks.filter((task) => task.status === "in_progress").length;
   const submittedCount = filteredTasks.filter((task) => task.status === "submitted").length;
   const completedCount = filteredTasks.filter((task) => task.status === "completed").length;
+  const rejectedCount = filteredTasks.filter((task) => task.status === "rejected").length;
 
   const handleExport = () => {
     const header = [
@@ -166,12 +198,13 @@ const Contributions = () => {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">
         <StatCard label="Total" value={totalTasks} color="text-slate-900" />
         <StatCard label="Not Started" value={notStartedCount} color="text-slate-500" dot="bg-slate-400" />
         <StatCard label="In Progress" value={inProgressCount} color="text-amber-600" dot="bg-amber-500" />
         <StatCard label="Waiting Review" value={submittedCount} color="text-blue-600" dot="bg-blue-500" />
         <StatCard label="Approved" value={completedCount} color="text-emerald-600" dot="bg-emerald-500" />
+        <StatCard label="Rejected" value={rejectedCount} color="text-red-600" dot="bg-red-500" />
       </div>
 
       {/* Filters */}
@@ -281,13 +314,16 @@ const Contributions = () => {
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Due Date
                 </th>
+                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">
                     Loading contributions...
                   </td>
                 </tr>
@@ -295,7 +331,7 @@ const Contributions = () => {
 
               {!loading && filteredTasks.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-14">
+                  <td colSpan={8} className="px-6 py-14">
                     <div className="flex flex-col items-center gap-2 text-center">
                       <ClipboardList size={22} className="text-slate-300" />
                       <p className="text-sm font-medium text-slate-500">
@@ -365,6 +401,33 @@ const Contributions = () => {
 
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {task.dueDate ?? "-"}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {task.status === "submitted" ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApprove(task)}
+                            disabled={actionTaskId === task.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            <CheckCircle2 size={14} />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleReject(task)}
+                            disabled={actionTaskId === task.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                          >
+                            <XCircle size={14} />
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}

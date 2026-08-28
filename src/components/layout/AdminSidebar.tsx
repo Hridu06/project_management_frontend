@@ -3,8 +3,6 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
-  UserCog,
-  UserCheck,
   Users2,
   FolderKanban,
   Clock3,

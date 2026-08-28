@@ -22,6 +22,7 @@ import {
   Trash2,
   Users,
   X,
+  XCircle,
 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import TaskActivityModal from "../../components/tasks/TaskActivityModal";
@@ -37,6 +38,7 @@ import {
   createTask,
   deleteTask,
   getTasks,
+  rejectTask,
   updateTask,
 } from "../../services/taskService";
 import { useAuth } from "../../context/AuthContext";
@@ -86,6 +88,7 @@ const taskStatusStyles: Record<Task["status"], string> = {
   in_progress: "bg-amber-50 text-amber-600",
   submitted: "bg-blue-50 text-blue-600",
   completed: "bg-emerald-50 text-emerald-600",
+  rejected: "bg-red-50 text-red-600",
 };
 
 const taskStatusLabels: Record<Task["status"], string> = {
@@ -93,6 +96,7 @@ const taskStatusLabels: Record<Task["status"], string> = {
   in_progress: "In Progress",
   submitted: "Waiting for Review",
   completed: "Approved",
+  rejected: "Rejected",
 };
 
 const taskStatusBarColors: Record<Task["status"], string> = {
@@ -100,6 +104,7 @@ const taskStatusBarColors: Record<Task["status"], string> = {
   in_progress: "bg-amber-500",
   submitted: "bg-blue-500",
   completed: "bg-emerald-500",
+  rejected: "bg-red-500",
 };
 
 const taskPriorityStyles: Record<TaskPriority, string> = {
@@ -476,6 +481,21 @@ const ProjectDetail = () => {
       setTasks((prev) => prev.map((item) => (item.id === task.id ? updated : item)));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to approve task.");
+    } finally {
+      setTaskActionId(null);
+    }
+  };
+
+  const handleRejectTask = async (task: Task) => {
+    const reason = window.prompt(`Reject "${task.title}"? Add an optional reason:`);
+    if (reason === null) return;
+
+    setTaskActionId(task.id);
+    try {
+      const updated = await rejectTask(task.id, reason.trim() || undefined);
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? updated : item)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to reject task.");
     } finally {
       setTaskActionId(null);
     }
@@ -895,15 +915,27 @@ const ProjectDetail = () => {
                           {canManageProjects && (
                           <div className="flex items-center justify-end gap-2">
                             {task.status === "submitted" && (
-                              <button
-                                type="button"
-                                onClick={() => handleApproveTask(task)}
-                                disabled={isBusy}
-                                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
-                              >
-                                <CheckCircle2 size={14} />
-                                {isBusy ? "Approving..." : "Approve"}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveTask(task)}
+                                  disabled={isBusy}
+                                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                  <CheckCircle2 size={14} />
+                                  {isBusy ? "Approving..." : "Approve"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectTask(task)}
+                                  disabled={isBusy}
+                                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                                >
+                                  <XCircle size={14} />
+                                  {isBusy ? "Rejecting..." : "Reject"}
+                                </button>
+                              </>
                             )}
 
                             <button

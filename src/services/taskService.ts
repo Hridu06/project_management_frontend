@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import type {
+  ContributionFormInput,
   Task,
   TaskActivity,
   TaskFormInput,
@@ -23,6 +24,9 @@ interface ApiTask {
   started_at: string | null;
   submitted_at: string | null;
   approved_at: string | null;
+  rejected_at: string | null;
+  rejected_by: TaskPersonRef | null;
+  rejection_reason: string | null;
   subtasks: ApiTask[];
   created_at: string;
   updated_at: string;
@@ -68,6 +72,9 @@ const toTask = (data: ApiTask): Task => ({
   startedAt: data.started_at,
   submittedAt: data.submitted_at,
   approvedAt: data.approved_at,
+  rejectedAt: data.rejected_at,
+  rejectedBy: data.rejected_by,
+  rejectionReason: data.rejection_reason,
   subtasks: (data.subtasks ?? []).map(toTask),
   createdAt: data.created_at,
   updatedAt: data.updated_at,
@@ -158,6 +165,28 @@ export const submitTask = async (id: number): Promise<Task> => {
 export const approveTask = async (id: number): Promise<Task> => {
   const data = await apiRequest<TaskResponse>(`/tasks/${id}/approve`, {
     method: "POST",
+  });
+
+  return toTask(data.task);
+};
+
+export const rejectTask = async (id: number, reason?: string): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${id}/reject`, {
+    method: "POST",
+    body: reason ? { reason } : undefined,
+  });
+
+  return toTask(data.task);
+};
+
+export const contributeTask = async (input: ContributionFormInput): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>("/tasks/contribute", {
+    method: "POST",
+    body: {
+      project_id: input.projectId,
+      title: input.title,
+      description: input.description || null,
+    },
   });
 
   return toTask(data.task);

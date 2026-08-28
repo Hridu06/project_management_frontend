@@ -303,7 +303,7 @@ const Managers = () => {
 
               {!loading &&
                 filteredManagers.map((manager) => (
-                  <tr key={manager.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={manager.key} className="border-b border-slate-100 last:border-0">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {manager.avatar ? (
