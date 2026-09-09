@@ -35,6 +35,8 @@ const taskStatusStyles: Record<TaskStatus, { badge: string; dot: string }> = {
   in_progress: { badge: "bg-amber-50 text-amber-600", dot: "bg-amber-500" },
   submitted: { badge: "bg-blue-50 text-blue-600", dot: "bg-blue-500" },
   completed: { badge: "bg-emerald-50 text-emerald-600", dot: "bg-emerald-500" },
+  rejected: { badge: "bg-red-50 text-red-600", dot: "bg-red-500" },
+  paused: { badge: "bg-rose-50 text-rose-500", dot: "bg-rose-400" },
 };
 
 const taskStatusLabels: Record<TaskStatus, string> = {
@@ -42,6 +44,8 @@ const taskStatusLabels: Record<TaskStatus, string> = {
   in_progress: "In Progress",
   submitted: "Waiting for Review",
   completed: "Approved",
+  rejected: "Rejected",
+  paused: "Paused",
 };
 
 const EmployeeDashboard = () => {

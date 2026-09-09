@@ -27,6 +27,8 @@ interface ApiTask {
   rejected_at: string | null;
   rejected_by: TaskPersonRef | null;
   rejection_reason: string | null;
+  is_edited: boolean;
+  is_added_later: boolean;
   subtasks: ApiTask[];
   created_at: string;
   updated_at: string;
@@ -75,6 +77,8 @@ const toTask = (data: ApiTask): Task => ({
   rejectedAt: data.rejected_at,
   rejectedBy: data.rejected_by,
   rejectionReason: data.rejection_reason,
+  isEdited: data.is_edited,
+  isAddedLater: data.is_added_later,
   subtasks: (data.subtasks ?? []).map(toTask),
   createdAt: data.created_at,
   updatedAt: data.updated_at,
@@ -195,6 +199,37 @@ export const contributeTask = async (input: ContributionFormInput): Promise<Task
 export const toggleSubtask = async (taskId: number, subtaskId: number): Promise<Task> => {
   const data = await apiRequest<TaskResponse>(
     `/tasks/${taskId}/subtasks/${subtaskId}/toggle`,
+    { method: "POST" },
+  );
+
+  return toTask(data.task);
+};
+
+export const addSubtask = async (taskId: number, title: string): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${taskId}/subtasks`, {
+    method: "POST",
+    body: { title },
+  });
+
+  return toTask(data.task);
+};
+
+export const updateSubtask = async (
+  taskId: number,
+  subtaskId: number,
+  title: string,
+): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${taskId}/subtasks/${subtaskId}`, {
+    method: "PUT",
+    body: { title },
+  });
+
+  return toTask(data.task);
+};
+
+export const pauseSubtask = async (taskId: number, subtaskId: number): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(
+    `/tasks/${taskId}/subtasks/${subtaskId}/pause`,
     { method: "POST" },
   );
 

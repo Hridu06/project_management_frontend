@@ -2,11 +2,16 @@ import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   ClipboardList,
+  Edit3,
   ListChecks,
+  ListPlus,
   Loader2,
+  PauseCircle,
   PlayCircle,
+  RotateCcw,
   Send,
   Users,
+  XCircle,
 } from "lucide-react";
 import Modal from "../common/Modal";
 import { getTaskActivities } from "../../services/taskService";
@@ -28,7 +33,12 @@ const actionMeta: Record<
   subtask_toggled: { label: "Sub-task updated", icon: ListChecks, iconClass: "bg-slate-100 text-slate-500" },
   submitted: { label: "Submitted for review", icon: Send, iconClass: "bg-blue-50 text-blue-600" },
   approved: { label: "Approved", icon: CheckCircle2, iconClass: "bg-emerald-50 text-emerald-600" },
+  rejected: { label: "Rejected", icon: XCircle, iconClass: "bg-red-50 text-red-600" },
   reassigned: { label: "Reassigned", icon: Users, iconClass: "bg-violet-50 text-violet-600" },
+  subtask_added: { label: "Sub-task added", icon: ListPlus, iconClass: "bg-blue-50 text-blue-600" },
+  subtask_edited: { label: "Sub-task edited", icon: Edit3, iconClass: "bg-amber-50 text-amber-600" },
+  subtask_paused: { label: "Sub-task paused", icon: PauseCircle, iconClass: "bg-rose-50 text-rose-500" },
+  subtask_resumed: { label: "Sub-task resumed", icon: RotateCcw, iconClass: "bg-emerald-50 text-emerald-600" },
 };
 
 const formatTimestamp = (value: string): string => {

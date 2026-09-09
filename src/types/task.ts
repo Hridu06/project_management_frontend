@@ -3,7 +3,8 @@ export type TaskStatus =
   | "in_progress"
   | "submitted"
   | "completed"
-  | "rejected";
+  | "rejected"
+  | "paused";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export interface TaskPersonRef {
@@ -31,6 +32,8 @@ export interface Task {
   rejectedAt: string | null;
   rejectedBy: TaskPersonRef | null;
   rejectionReason: string | null;
+  isEdited: boolean;
+  isAddedLater: boolean;
   subtasks: Task[];
   createdAt: string;
   updatedAt: string;
@@ -43,7 +46,11 @@ export type TaskActivityAction =
   | "submitted"
   | "approved"
   | "rejected"
-  | "reassigned";
+  | "reassigned"
+  | "subtask_added"
+  | "subtask_edited"
+  | "subtask_paused"
+  | "subtask_resumed";
 
 export interface TaskActivity {
   id: number;

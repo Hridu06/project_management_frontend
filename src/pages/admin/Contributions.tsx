@@ -20,6 +20,7 @@ const statusStyles: Record<TaskStatus, string> = {
   submitted: "bg-blue-50 text-blue-600",
   completed: "bg-emerald-50 text-emerald-600",
   rejected: "bg-red-50 text-red-600",
+  paused: "bg-rose-50 text-rose-500",
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -28,6 +29,7 @@ const statusLabels: Record<TaskStatus, string> = {
   submitted: "Waiting for Review",
   completed: "Approved",
   rejected: "Rejected",
+  paused: "Paused",
 };
 
 const priorityStyles: Record<TaskPriority, string> = {

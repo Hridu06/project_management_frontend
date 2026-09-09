@@ -23,22 +23,44 @@ import {
   Users,
   X,
   XCircle,
+  Clock,
+  User,
+  Calendar as CalendarIcon,
+  Flag,
+  CheckSquare,
+  AlertCircle,
+  PlayCircle,
+  Clock as ClockIcon,
+  CheckCircle,
+  XCircle as XCircleIcon,
+  ChevronDown,
+  ChevronRight as ChevronRightIcon,
+  Circle,
+  CircleCheck,
+  PauseCircle,
+  Play,
+  Edit3,
+  Sparkles,
 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import TaskActivityModal from "../../components/tasks/TaskActivityModal";
 import {
   useDeleteProjectMutation,
+  useProjectAnalyticsQuery,
   useProjectsQuery,
   useUpdateProjectMutation,
 } from "../../hooks/useProjectQueries";
 import { useTeamsQuery } from "../../hooks/useTeamQueries";
 import { getEmployees } from "../../services/employeeService";
 import {
+  addSubtask,
   approveTask,
   createTask,
   deleteTask,
   getTasks,
+  pauseSubtask,
   rejectTask,
+  updateSubtask,
   updateTask,
 } from "../../services/taskService";
 import { useAuth } from "../../context/AuthContext";
@@ -89,6 +111,7 @@ const taskStatusStyles: Record<Task["status"], string> = {
   submitted: "bg-blue-50 text-blue-600",
   completed: "bg-emerald-50 text-emerald-600",
   rejected: "bg-red-50 text-red-600",
+  paused: "bg-rose-50 text-rose-500",
 };
 
 const taskStatusLabels: Record<Task["status"], string> = {
@@ -97,6 +120,7 @@ const taskStatusLabels: Record<Task["status"], string> = {
   submitted: "Waiting for Review",
   completed: "Approved",
   rejected: "Rejected",
+  paused: "Paused",
 };
 
 const taskStatusBarColors: Record<Task["status"], string> = {
@@ -105,7 +129,21 @@ const taskStatusBarColors: Record<Task["status"], string> = {
   submitted: "bg-blue-500",
   completed: "bg-emerald-500",
   rejected: "bg-red-500",
+  paused: "bg-rose-400",
 };
+
+const ASSIGNEE_CHART_COLORS = [
+  "#3b82f6", // blue
+  "#f97316", // orange
+  "#8b5cf6", // violet
+  "#f59e0b", // amber
+  "#f43f5e", // rose
+  "#10b981", // emerald
+  "#6366f1", // indigo
+  "#ef4444", // red
+];
+const ASSIGNEE_CHART_OTHER_COLOR = "#94a3b8";
+const ASSIGNEE_CHART_MAX_SLICES = 7;
 
 const taskPriorityStyles: Record<TaskPriority, string> = {
   low: "bg-slate-100 text-slate-500",
@@ -121,6 +159,22 @@ const taskPriorityLabels: Record<TaskPriority, string> = {
   urgent: "Urgent",
 };
 
+const taskPriorityIcon: Record<TaskPriority, typeof Flag> = {
+  low: Flag,
+  medium: Flag,
+  high: Flag,
+  urgent: AlertCircle,
+};
+
+const taskStatusIcon: Record<Task["status"], typeof ClockIcon> = {
+  not_started: ClockIcon,
+  in_progress: PlayCircle,
+  submitted: Clock,
+  completed: CheckCircle,
+  rejected: XCircleIcon,
+  paused: PauseCircle,
+};
+
 const emptyTaskForm = (projectId: number): TaskFormInput => ({
   projectId,
   assignedTo: 0,
@@ -133,14 +187,21 @@ const emptyTaskForm = (projectId: number): TaskFormInput => ({
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+interface EditableSubtask {
+  id: number;
+  title: string;
+  originalTitle: string;
+  status: Task["status"];
+  isEdited: boolean;
+  isAddedLater: boolean;
+}
+
 const ProjectDetail = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  // Managers can edit project settings and manage tasks alongside admins;
-  // deleting the project stays admin-only. Employees get a read-only view.
   const canManageProjects = isAdmin || user?.role === "manager";
 
   const projectsQuery = useProjectsQuery();
@@ -158,8 +219,6 @@ const ProjectDetail = () => {
   const [tasksLoading, setTasksLoading] = useState(true);
   const loading = projectsQuery.isLoading || teamsQuery.isLoading || tasksLoading;
 
-  // The active tab is driven by the ?tab= query param (not local state) so
-  // the sidebar's per-project sub-menu links can deep-link straight to a tab.
   const tabParam = searchParams.get("tab");
   const activeTab: TabId =
     tabParam === "tasks" ||
@@ -180,7 +239,6 @@ const ProjectDetail = () => {
     );
   };
 
-  // Task modal state
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskForm, setTaskForm] = useState<TaskFormInput>(emptyTaskForm(0));
   const [subtaskDraft, setSubtaskDraft] = useState("");
@@ -190,12 +248,20 @@ const ProjectDetail = () => {
   const [taskActionId, setTaskActionId] = useState<number | null>(null);
   const [activityTask, setActivityTask] = useState<Task | null>(null);
 
-  // Filter states
+  // State for expanded subtasks
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
+  const [pausingSubtaskId, setPausingSubtaskId] = useState<number | null>(null);
+
+  // Existing sub-tasks of the task being edited: title is editable, but the
+  // row can never be removed here — only paused/resumed from the task list.
+  const [editableSubtasks, setEditableSubtasks] = useState<EditableSubtask[]>([]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterEmployee, setFilterEmployee] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
 
-  // Calendar tab state
   const today = useMemo(() => new Date(), []);
   const [calendarMonth, setCalendarMonth] = useState(() => ({
     year: today.getFullYear(),
@@ -203,7 +269,6 @@ const ProjectDetail = () => {
   }));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Settings tab state
   const [settingsForm, setSettingsForm] = useState<ProjectFormInput | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -227,9 +292,6 @@ const ProjectDetail = () => {
     load();
   }, [projectId]);
 
-  // Seed the settings form once the project loads. Keyed on project.id
-  // (not the whole object) so a background refetch of the shared projects
-  // cache doesn't clobber an in-progress edit — only switching projects does.
   useEffect(() => {
     if (!project) return;
 
@@ -245,33 +307,27 @@ const ProjectDetail = () => {
       githubLink: project.githubLink ?? "",
       teamId: project.teamId,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
-  // Project membership comes from the linked team's members (Users), which
-  // are matched back to Employee records by email — the two tables aren't
-  // directly linked on the frontend.
   const assignedEmployees = useMemo(() => {
     if (!project) return [];
     const memberEmails = new Set(project.members.map((member) => member.email));
     return employees.filter((employee) => memberEmails.has(employee.email));
   }, [project, employees]);
 
-  // Tasks are assigned to Users (project.members), not Employee records
-  // directly, so employee-wise summaries need to bridge the two by email.
   const memberIdByEmail = useMemo(() => {
     const map = new Map<string, number>();
     for (const member of project?.members ?? []) map.set(member.email, member.id);
     return map;
   }, [project]);
 
-  // Statistics
   const taskStats = useMemo(() => {
     const total = tasks.length;
     const completed = tasks.filter((task) => task.status === "completed").length;
     const inProgress = tasks.filter((task) => task.status === "in_progress").length;
     const notStarted = tasks.filter((task) => task.status === "not_started").length;
     const submitted = tasks.filter((task) => task.status === "submitted").length;
+    const rejected = tasks.filter((task) => task.status === "rejected").length;
 
     const assigneeSummary = assignedEmployees
       .map((employee) => {
@@ -283,15 +339,15 @@ const ProjectDetail = () => {
           name: employee.name,
           total: employeeTasks.length,
           completed: employeeTasks.filter((task) => task.status === "completed").length,
+          inProgress: employeeTasks.filter((task) => task.status === "in_progress").length,
         };
       })
       .filter((summary) => summary.total > 0)
       .sort((a, b) => b.total - a.total);
 
-    return { total, completed, inProgress, notStarted, submitted, assigneeSummary };
+    return { total, completed, inProgress, notStarted, submitted, rejected, assigneeSummary };
   }, [tasks, assignedEmployees, memberIdByEmail]);
 
-  // Filtered tasks
   const filteredTasks = useMemo(() => {
     let filtered = [...tasks];
 
@@ -313,10 +369,17 @@ const ProjectDetail = () => {
       filtered = filtered.filter((task) => task.dueDate === filterDate);
     }
 
-    return filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, [tasks, searchTerm, filterEmployee, filterDate]);
+    if (filterStatus !== "all") {
+      filtered = filtered.filter((task) => task.status === filterStatus);
+    }
 
-  // Calendar computations
+    if (filterPriority !== "all") {
+      filtered = filtered.filter((task) => task.priority === filterPriority);
+    }
+
+    return filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, [tasks, searchTerm, filterEmployee, filterDate, filterStatus, filterPriority]);
+
   const tasksByDueDate = useMemo(() => {
     const map = new Map<string, Task[]>();
     for (const task of tasks) {
@@ -375,30 +438,74 @@ const ProjectDetail = () => {
     ? (tasksByDueDate.get(selectedDate) ?? []).sort((a, b) => a.title.localeCompare(b.title))
     : [];
 
-  // Analytics computations
-  const taskStatusBreakdown = useMemo(() => {
-    const total = tasks.length;
-    return (["not_started", "in_progress", "submitted", "completed"] as Task["status"][]).map(
-      (status) => {
-        const count = tasks.filter((task) => task.status === status).length;
-        return {
-          status,
-          count,
-          percent: total > 0 ? Math.round((count / total) * 100) : 0,
-        };
-      },
-    );
-  }, [tasks]);
-
-  const maxAssigneeTaskCount = useMemo(
-    () => Math.max(1, ...taskStats.assigneeSummary.map((s) => s.total)),
-    [taskStats.assigneeSummary],
+  // Analytics tab data (status breakdown + each assignee's share of tasks)
+  // is computed server-side — fetched only once that tab is opened.
+  const analyticsQuery = useProjectAnalyticsQuery(
+    projectId ? Number(projectId) : null,
+    activeTab === "analytics",
   );
+
+  const taskStatusBreakdown = analyticsQuery.data?.taskStatusBreakdown ?? [];
+
+  const assigneeColorMap = useMemo(() => {
+    const map = new Map<number, string>();
+    assignedEmployees.forEach((employee, index) => {
+      map.set(employee.id, ASSIGNEE_CHART_COLORS[index % ASSIGNEE_CHART_COLORS.length]);
+    });
+    return map;
+  }, [assignedEmployees]);
+
+  const assigneeChart = useMemo(() => {
+    const breakdown = analyticsQuery.data?.assigneeBreakdown ?? [];
+    const totalAssigned = analyticsQuery.data?.totalAssigned ?? 0;
+    if (totalAssigned === 0 || breakdown.length === 0) return { slices: [], totalAssigned };
+
+    const top = breakdown.slice(0, ASSIGNEE_CHART_MAX_SLICES);
+    const rest = breakdown.slice(ASSIGNEE_CHART_MAX_SLICES);
+
+    const slices = top.map((summary) => ({
+      id: summary.id,
+      name: summary.name,
+      total: summary.total,
+      completed: summary.completed,
+      percent: summary.percent,
+      color: assigneeColorMap.get(summary.id) ?? ASSIGNEE_CHART_COLORS[0],
+    }));
+
+    if (rest.length > 0) {
+      const restTotal = rest.reduce((sum, s) => sum + s.total, 0);
+      const restCompleted = rest.reduce((sum, s) => sum + s.completed, 0);
+      const restPercent = rest.reduce((sum, s) => sum + s.percent, 0);
+      slices.push({
+        id: -1,
+        name: `Others (${rest.length})`,
+        total: restTotal,
+        completed: restCompleted,
+        percent: restPercent,
+        color: ASSIGNEE_CHART_OTHER_COLOR,
+      });
+    }
+
+    return { slices, totalAssigned };
+  }, [analyticsQuery.data, assigneeColorMap]);
 
   const visibleTabs = useMemo(
     () => TABS.filter((tab) => tab.id !== "settings" || canManageProjects),
     [canManageProjects],
   );
+
+  // Toggle subtask expansion
+  const toggleTaskExpansion = (taskId: number) => {
+    setExpandedTasks((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
 
   const openAssignTaskModal = () => {
     if (!projectId) return;
@@ -406,6 +513,7 @@ const ProjectDetail = () => {
     setEditingTaskId(null);
     setTaskForm(emptyTaskForm(Number(projectId)));
     setSubtaskDraft("");
+    setEditableSubtasks([]);
     setTaskModalOpen(true);
   };
 
@@ -423,7 +531,23 @@ const ProjectDetail = () => {
       subtasks: [],
     });
     setSubtaskDraft("");
+    setEditableSubtasks(
+      task.subtasks.map((subtask) => ({
+        id: subtask.id,
+        title: subtask.title,
+        originalTitle: subtask.title,
+        status: subtask.status,
+        isEdited: subtask.isEdited,
+        isAddedLater: subtask.isAddedLater,
+      })),
+    );
     setTaskModalOpen(true);
+  };
+
+  const updateEditableSubtaskTitle = (id: number, title: string) => {
+    setEditableSubtasks((prev) =>
+      prev.map((subtask) => (subtask.id === id ? { ...subtask, title } : subtask)),
+    );
   };
 
   const addSubtaskDraft = () => {
@@ -453,13 +577,24 @@ const ProjectDetail = () => {
 
     try {
       if (editingTaskId) {
-        const updated = await updateTask(editingTaskId, {
+        let updated = await updateTask(editingTaskId, {
           title: taskForm.title,
           description: taskForm.description,
           priority: taskForm.priority,
           assignedTo: taskForm.assignedTo,
           dueDate: taskForm.dueDate,
         });
+
+        for (const subtask of editableSubtasks) {
+          const title = subtask.title.trim();
+          if (!title || title === subtask.originalTitle) continue;
+          updated = await updateSubtask(editingTaskId, subtask.id, title);
+        }
+
+        for (const title of taskForm.subtasks.map((t) => t.trim()).filter(Boolean)) {
+          updated = await addSubtask(editingTaskId, title);
+        }
+
         setTasks((prev) => prev.map((task) => (task.id === editingTaskId ? updated : task)));
       } else {
         const created = await createTask(taskForm);
@@ -513,6 +648,18 @@ const ProjectDetail = () => {
       alert(err instanceof Error ? err.message : "Failed to delete task.");
     } finally {
       setTaskActionId(null);
+    }
+  };
+
+  const handlePauseSubtask = async (task: Task, subtaskId: number) => {
+    setPausingSubtaskId(subtaskId);
+    try {
+      const updated = await pauseSubtask(task.id, subtaskId);
+      setTasks((prev) => prev.map((item) => (item.id === task.id ? updated : item)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update sub-task.");
+    } finally {
+      setPausingSubtaskId(null);
     }
   };
 
@@ -606,7 +753,6 @@ const ProjectDetail = () => {
         Back to Projects
       </button>
 
-      {/* Project Header */}
       <div className="rounded-xl border border-slate-200 bg-white p-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div className="flex items-start gap-4">
@@ -666,7 +812,6 @@ const ProjectDetail = () => {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard
             icon={<ListChecks size={18} className="text-blue-500" />}
@@ -695,7 +840,6 @@ const ProjectDetail = () => {
         </div>
       </div>
 
-      {/* Tabs Card */}
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 px-2">
           {visibleTabs.map((tab) => {
@@ -722,7 +866,6 @@ const ProjectDetail = () => {
         <div className="p-6">
           {activeTab === "tasks" && (
             <div>
-              {/* Assigned Employees */}
               <div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -766,7 +909,6 @@ const ProjectDetail = () => {
                 )}
               </div>
 
-              {/* Tasks */}
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -791,13 +933,13 @@ const ProjectDetail = () => {
                   )}
                 </div>
 
-                {/* Filters */}
+                {/* Enhanced Filters */}
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <div className="relative flex-1 min-w-[150px]">
+                  <div className="relative flex-1 min-w-[200px]">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search title, description or assignee..."
+                      placeholder="Search tasks..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -805,11 +947,37 @@ const ProjectDetail = () => {
                   </div>
 
                   <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="not_started">Not Started</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="submitted">Submitted</option>
+                    <option value="completed">Completed</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="paused">Paused</option>
+                  </select>
+
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="all">All Priority</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+
+                  <select
                     value={filterEmployee}
                     onChange={(e) => setFilterEmployee(e.target.value)}
                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   >
-                    <option value="all">All Employees</option>
+                    <option value="all">All Assignees</option>
                     {project.members.map((member) => (
                       <option key={member.id} value={member.id}>{member.name}</option>
                     ))}
@@ -822,22 +990,25 @@ const ProjectDetail = () => {
                     className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   />
 
-                  {(searchTerm || filterEmployee !== "all" || filterDate) && (
+                  {(searchTerm || filterEmployee !== "all" || filterDate || filterStatus !== "all" || filterPriority !== "all") && (
                     <button
                       type="button"
                       onClick={() => {
                         setSearchTerm("");
                         setFilterEmployee("all");
                         setFilterDate("");
+                        setFilterStatus("all");
+                        setFilterPriority("all");
                       }}
                       className="text-sm text-blue-600 hover:text-blue-700"
                     >
-                      Clear filters
+                      Clear all filters
                     </button>
                   )}
                 </div>
 
-                <div className="mt-4 space-y-3">
+                {/* Enhanced Task List with Subtasks */}
+                <div className="mt-4 space-y-4">
                   {filteredTasks.length === 0 && (
                     <div className="flex flex-col items-center gap-2 rounded-lg border border-slate-200 py-14 text-center">
                       <ClipboardCheck size={22} className="text-slate-300" />
@@ -852,112 +1023,259 @@ const ProjectDetail = () => {
                       (subtask) => subtask.status === "completed",
                     ).length;
                     const isBusy = taskActionId === task.id;
+                    const StatusIcon = taskStatusIcon[task.status];
+                    const PriorityIcon = taskPriorityIcon[task.priority];
+                    const isExpanded = expandedTasks.has(task.id);
+                    const hasSubtasks = task.subtasks.length > 0;
 
                     return (
                       <div
                         key={task.id}
-                        className="rounded-lg border border-slate-200 p-4"
+                        className="group rounded-xl border border-slate-200 bg-white p-5 transition-all hover:shadow-md hover:border-blue-200"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-800">{task.title}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {/* Expand/Collapse Button for Subtasks */}
+                              {hasSubtasks && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTaskExpansion(task.id)}
+                                  className="flex items-center justify-center rounded-lg p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                                  aria-label={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown size={16} />
+                                  ) : (
+                                    <ChevronRightIcon size={16} />
+                                  )}
+                                </button>
+                              )}
+
+                              <h3 className="text-sm font-semibold text-slate-800 group-hover:text-blue-600 transition-colors">
+                                {task.title}
+                              </h3>
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${taskPriorityStyles[task.priority]}`}
+                              >
+                                <PriorityIcon size={12} />
+                                {taskPriorityLabels[task.priority]}
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${taskStatusStyles[task.status]}`}
+                              >
+                                <StatusIcon size={12} />
+                                {taskStatusLabels[task.status]}
+                              </span>
+                            </div>
+
                             {task.description && (
-                              <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                              <p className="mt-1.5 line-clamp-2 text-sm text-slate-500">
                                 {task.description}
                               </p>
                             )}
-                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                              <span>Assigned to {task.assignedTo?.name ?? "Unassigned"}</span>
-                              {task.createdBy && <span>Added by {task.createdBy.name}</span>}
-                              {task.subtasks.length > 0 && (
-                                <span>
-                                  {completedSubtasks}/{task.subtasks.length} sub-tasks done
-                                </span>
+
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
+                              <div className="flex items-center gap-1.5">
+                                <User size={13} />
+                                <span>{task.assignedTo?.name ?? "Unassigned"}</span>
+                              </div>
+                              {task.dueDate && (
+                                <div className="flex items-center gap-1.5">
+                                  <CalendarIcon size={13} />
+                                  <span>Due {task.dueDate}</span>
+                                </div>
                               )}
-                              {task.dueDate && <span>Due {task.dueDate}</span>}
+                              {task.createdBy && (
+                                <span>Created by {task.createdBy.name}</span>
+                              )}
+                              {task.subtasks.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                  <CheckSquare size={13} />
+                                  <span>
+                                    {completedSubtasks}/{task.subtasks.length} sub-tasks
+                                  </span>
+                                </div>
+                              )}
                             </div>
+
+                            {/* Subtasks List - Collapsible */}
+                            {hasSubtasks && isExpanded && (
+                              <div className="mt-3 border-t border-slate-100 pt-3">
+                                <p className="text-xs font-medium text-slate-600 mb-2">
+                                  Sub-tasks ({completedSubtasks}/{task.subtasks.length} done)
+                                </p>
+                                <div className="space-y-1.5">
+                                  {task.subtasks.map((subtask) => {
+                                    const isPaused = subtask.status === "paused";
+                                    const isCompleted = subtask.status === "completed";
+                                    const isPausing = pausingSubtaskId === subtask.id;
+
+                                    return (
+                                      <div
+                                        key={subtask.id}
+                                        className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
+                                          isPaused ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50"
+                                        }`}
+                                      >
+                                        {isCompleted ? (
+                                          <CircleCheck size={14} className="text-emerald-500" />
+                                        ) : isPaused ? (
+                                          <PauseCircle size={14} className="text-rose-400" />
+                                        ) : (
+                                          <Circle size={14} className="text-slate-300" />
+                                        )}
+                                        <span
+                                          className={`text-sm ${
+                                            isCompleted
+                                              ? "text-slate-400 line-through"
+                                              : isPaused
+                                                ? "text-rose-500"
+                                                : "text-slate-700"
+                                          }`}
+                                        >
+                                          {subtask.title}
+                                        </span>
+
+                                        {subtask.isEdited && (
+                                          <span
+                                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600"
+                                            title="This sub-task was edited after it was created"
+                                          >
+                                            <Edit3 size={10} />
+                                            Edited
+                                          </span>
+                                        )}
+                                        {subtask.isAddedLater && (
+                                          <span
+                                            className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600"
+                                            title="This sub-task was added after the task was assigned"
+                                          >
+                                            <Sparkles size={10} />
+                                            New
+                                          </span>
+                                        )}
+
+                                        <span
+                                          className={`ml-auto text-xs ${
+                                            isCompleted
+                                              ? "text-emerald-500"
+                                              : isPaused
+                                                ? "text-rose-500"
+                                                : "text-slate-400"
+                                          }`}
+                                        >
+                                          {isCompleted ? "Done" : isPaused ? "Paused" : "Pending"}
+                                        </span>
+
+                                        {canManageProjects && !isCompleted && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handlePauseSubtask(task, subtask.id)}
+                                            disabled={isPausing}
+                                            className={`shrink-0 rounded-md p-1 transition-colors disabled:opacity-50 ${
+                                              isPaused
+                                                ? "text-rose-500 hover:bg-rose-100"
+                                                : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                            }`}
+                                            title={isPaused ? "Resume sub-task" : "Pause sub-task"}
+                                            aria-label={
+                                              isPaused
+                                                ? `Resume ${subtask.title}`
+                                                : `Pause ${subtask.title}`
+                                            }
+                                          >
+                                            {isPaused ? <Play size={13} /> : <PauseCircle size={13} />}
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex shrink-0 items-center gap-2">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${taskPriorityStyles[task.priority]}`}
+                            <button
+                              type="button"
+                              onClick={() => setActivityTask(task)}
+                              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                              title="View activity"
                             >
-                              {task.priority}
-                            </span>
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${taskStatusStyles[task.status]}`}
-                            >
-                              {taskStatusLabels[task.status]}
-                            </span>
-                          </div>
-                        </div>
+                              <History size={16} />
+                            </button>
 
-                        <div className="mt-3 flex items-center gap-2">
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-blue-600 transition-all duration-500"
-                              style={{ width: `${task.progress}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-medium text-slate-500">{task.progress}%</span>
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setActivityTask(task)}
-                            className="flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-slate-600"
-                          >
-                            <History size={12} />
-                            View activity
-                          </button>
-
-                          {canManageProjects && (
-                          <div className="flex items-center justify-end gap-2">
-                            {task.status === "submitted" && (
+                            {canManageProjects && (
                               <>
+                                {task.status === "submitted" && (
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApproveTask(task)}
+                                      disabled={isBusy}
+                                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+                                    >
+                                      <CheckCircle2 size={14} />
+                                      {isBusy ? "..." : "Approve"}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRejectTask(task)}
+                                      disabled={isBusy}
+                                      className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                                    >
+                                      <XCircle size={14} />
+                                      {isBusy ? "..." : "Reject"}
+                                    </button>
+                                  </div>
+                                )}
+
                                 <button
                                   type="button"
-                                  onClick={() => handleApproveTask(task)}
-                                  disabled={isBusy}
-                                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+                                  onClick={() => openEditTaskModal(task)}
+                                  className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                                  aria-label={`Edit ${task.title}`}
                                 >
-                                  <CheckCircle2 size={14} />
-                                  {isBusy ? "Approving..." : "Approve"}
+                                  <Edit2 size={16} />
                                 </button>
 
                                 <button
                                   type="button"
-                                  onClick={() => handleRejectTask(task)}
+                                  onClick={() => handleDeleteTask(task)}
                                   disabled={isBusy}
-                                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                                  className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-red-600"
+                                  aria-label={`Delete ${task.title}`}
                                 >
-                                  <XCircle size={14} />
-                                  {isBusy ? "Rejecting..." : "Reject"}
+                                  <Trash2 size={16} />
                                 </button>
                               </>
                             )}
-
-                            <button
-                              type="button"
-                              onClick={() => openEditTaskModal(task)}
-                              className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                              aria-label={`Edit ${task.title}`}
-                            >
-                              <Edit2 size={16} />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTask(task)}
-                              disabled={isBusy}
-                              className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
-                              aria-label={`Delete ${task.title}`}
-                            >
-                              <Trash2 size={16} />
-                            </button>
                           </div>
-                          )}
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ${
+                                  task.progress === 100 
+                                    ? "bg-emerald-500" 
+                                    : task.progress >= 70 
+                                    ? "bg-blue-500" 
+                                    : task.progress >= 30 
+                                    ? "bg-amber-500" 
+                                    : "bg-slate-400"
+                                }`}
+                                style={{ width: `${task.progress}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold text-slate-500 min-w-[36px] text-right">
+                              {task.progress}%
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1021,9 +1339,9 @@ const ProjectDetail = () => {
                           onClick={() =>
                             setSelectedDate((prev) => (prev === dateKey ? null : dateKey))
                           }
-                          className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-sm transition-colors ${
+                          className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg border text-sm transition-all ${
                             isSelected
-                              ? "border-blue-600 bg-blue-50 text-blue-700"
+                              ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-200"
                               : isToday
                                 ? "border-blue-200 bg-blue-50/50 text-slate-700"
                                 : "border-slate-100 text-slate-600 hover:bg-slate-50"
@@ -1064,7 +1382,7 @@ const ProjectDetail = () => {
                     {selectedDayTasks.map((task) => (
                       <div
                         key={task.id}
-                        className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3"
+                        className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3 hover:border-blue-200 transition-colors"
                       >
                         <div>
                           <p className="text-sm font-medium text-slate-800">
@@ -1072,7 +1390,7 @@ const ProjectDetail = () => {
                           </p>
                           <p className="mt-0.5 text-xs text-slate-500">
                             {task.assignedTo?.name ?? "Unassigned"} ·{" "}
-                            {task.priority} priority
+                            {taskPriorityLabels[task.priority]} priority
                           </p>
                         </div>
                         <span
@@ -1088,7 +1406,20 @@ const ProjectDetail = () => {
             </div>
           )}
 
-          {activeTab === "analytics" && (
+          {activeTab === "analytics" && analyticsQuery.isLoading && (
+            <div className="flex items-center justify-center py-12 text-sm text-slate-400">
+              <Loader2 size={18} className="mr-2 animate-spin" />
+              Loading analytics...
+            </div>
+          )}
+
+          {activeTab === "analytics" && analyticsQuery.isError && (
+            <p className="py-12 text-center text-sm text-red-500">
+              Couldn't load analytics. Please try again.
+            </p>
+          )}
+
+          {activeTab === "analytics" && analyticsQuery.data && (
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Task Status Breakdown</h2>
@@ -1116,28 +1447,77 @@ const ProjectDetail = () => {
 
               <div className="border-t border-slate-100 pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
                 <h2 className="text-base font-semibold text-slate-900">Assignee Breakdown</h2>
-                {taskStats.assigneeSummary.length === 0 ? (
+                <p className="mt-0.5 text-xs text-slate-400">Share of total tasks per assignee</p>
+                {assigneeChart.slices.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-400">No tasks assigned yet.</p>
                 ) : (
-                  <div className="mt-4 space-y-4">
-                    {taskStats.assigneeSummary.map((summary) => (
-                      <div key={summary.id}>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium text-slate-700">{summary.name}</span>
-                          <span className="text-slate-500">
-                            {summary.completed}/{summary.total} completed
+                  <div className="mt-4 flex flex-col items-center gap-6 sm:flex-row">
+                    <div className="relative h-40 w-40 shrink-0">
+                      <svg viewBox="0 0 42 42" className="h-full w-full -rotate-90">
+                        <circle
+                          cx="21"
+                          cy="21"
+                          r="15.9155"
+                          fill="none"
+                          stroke="#f1f5f9"
+                          strokeWidth="7"
+                        />
+                        {(() => {
+                          const gap = assigneeChart.slices.length > 1 ? 1.5 : 0;
+                          let cumulative = 0;
+                          return assigneeChart.slices.map((slice) => {
+                            const percent = slice.percent;
+                            const dash = Math.max(percent - gap, 0);
+                            const offset = -(cumulative + gap / 2);
+                            cumulative += percent;
+                            return (
+                              <circle
+                                key={slice.id}
+                                cx="21"
+                                cy="21"
+                                r="15.9155"
+                                fill="none"
+                                stroke={slice.color}
+                                strokeWidth="7"
+                                strokeLinecap="round"
+                                strokeDasharray={`${dash} ${100 - dash}`}
+                                strokeDashoffset={offset}
+                              >
+                                <title>
+                                  {slice.name}: {slice.total} task{slice.total === 1 ? "" : "s"} (
+                                  {Math.round(percent)}%)
+                                </title>
+                              </circle>
+                            );
+                          });
+                        })()}
+                      </svg>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-xl font-semibold text-slate-900">
+                          {assigneeChart.totalAssigned}
+                        </span>
+                        <span className="text-[11px] text-slate-400">total tasks</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full min-w-0 space-y-3">
+                      {assigneeChart.slices.map((slice) => (
+                        <div key={slice.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: slice.color }}
+                            />
+                            <span className="truncate font-medium text-slate-700">
+                              {slice.name}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-slate-500">
+                            {slice.total} · {Math.round(slice.percent)}%
                           </span>
                         </div>
-                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-violet-500"
-                            style={{
-                              width: `${Math.round((summary.total / maxAssigneeTaskCount) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1384,7 +1764,6 @@ const ProjectDetail = () => {
         </div>
       </div>
 
-      {/* Add / Edit Task Modal */}
       <Modal
         open={taskModalOpen}
         onClose={() => setTaskModalOpen(false)}
@@ -1483,60 +1862,92 @@ const ProjectDetail = () => {
             />
           </div>
 
-          {!editingTaskId && (
+          {editingTaskId && editableSubtasks.length > 0 && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Sub-tasks (checklist)
+                Existing Sub-tasks
               </label>
-
-              {taskForm.subtasks.length > 0 && (
-                <div className="mb-2 space-y-1.5">
-                  {taskForm.subtasks.map((title, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm text-slate-700"
-                    >
-                      <span className="truncate">{title}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeSubtaskDraft(index)}
-                        className="shrink-0 text-slate-400 transition-colors hover:text-red-600"
-                        aria-label="Remove sub-task"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={subtaskDraft}
-                  onChange={(event) => setSubtaskDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addSubtaskDraft();
-                    }
-                  }}
-                  placeholder="e.g. Design the form"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-                <button
-                  type="button"
-                  onClick={addSubtaskDraft}
-                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-                >
-                  Add
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-slate-400">
-                The employee's progress moves from 10% to 70% as they check these off.
+              <p className="mb-2 text-xs text-slate-400">
+                Rename a sub-task below — it'll be flagged "Edited" so the employee notices. Sub-tasks
+                can't be deleted here; pause one from the task list instead.
               </p>
+
+              <div className="space-y-1.5">
+                {editableSubtasks.map((subtask) => (
+                  <div key={subtask.id} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={subtask.title}
+                      onChange={(event) =>
+                        updateEditableSubtaskTitle(subtask.id, event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                    {subtask.status === "paused" && (
+                      <span className="shrink-0 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-500">
+                        Paused
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              {editingTaskId ? "Add New Sub-tasks" : "Sub-tasks (checklist)"}
+            </label>
+
+            {taskForm.subtasks.length > 0 && (
+              <div className="mb-2 space-y-1.5">
+                {taskForm.subtasks.map((title, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm text-slate-700"
+                  >
+                    <span className="truncate">{title}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeSubtaskDraft(index)}
+                      className="shrink-0 text-slate-400 transition-colors hover:text-red-600"
+                      aria-label="Remove sub-task"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={subtaskDraft}
+                onChange={(event) => setSubtaskDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addSubtaskDraft();
+                  }
+                }}
+                placeholder="e.g. Design the form"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                type="button"
+                onClick={addSubtaskDraft}
+                className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Add
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">
+              {editingTaskId
+                ? "New sub-tasks are flagged \"New\" so the employee can see what changed."
+                : "The employee's progress moves from 10% to 70% as they check these off."}
+            </p>
+          </div>
 
           {taskError && <p className="text-sm text-red-600">{taskError}</p>}
 
@@ -1570,7 +1981,6 @@ const ProjectDetail = () => {
   );
 };
 
-// Stat Card Component
 const StatCard = ({
   icon,
   label,

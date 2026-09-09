@@ -32,6 +32,8 @@ const statusMeta: Record<TaskStatus, { label: string; badge: string; dot: string
   in_progress: { label: "In Progress", badge: "bg-amber-50 text-amber-600", dot: "bg-amber-500", ring: "#f59e0b" },
   submitted: { label: "Waiting for Review", badge: "bg-blue-50 text-blue-600", dot: "bg-blue-500", ring: "#3b82f6" },
   completed: { label: "Approved", badge: "bg-emerald-50 text-emerald-600", dot: "bg-emerald-500", ring: "#10b981" },
+  rejected: { label: "Rejected", badge: "bg-red-50 text-red-600", dot: "bg-red-500", ring: "#ef4444" },
+  paused: { label: "Paused", badge: "bg-rose-50 text-rose-500", dot: "bg-rose-400", ring: "#fb7185" },
 };
 
 const priorityStyles: Record<TaskPriority, string> = {
@@ -380,25 +382,45 @@ const TaskCard = ({ task, busy, onStart, onSubmit, onToggleSubtask, onViewActivi
           <p className="text-xs font-medium text-slate-500">
             Sub-tasks ({completedSubtasks}/{task.subtasks.length})
           </p>
-          {task.subtasks.map((subtask) => (
-            <label
-              key={subtask.id}
-              className={`flex items-center gap-2 text-sm ${
-                task.status === "in_progress" ? "cursor-pointer" : "cursor-not-allowed opacity-60"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={subtask.status === "completed"}
-                disabled={task.status !== "in_progress" || busy}
-                onChange={() => onToggleSubtask(subtask.id)}
-                className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className={subtask.status === "completed" ? "text-slate-400 line-through" : "text-slate-700"}>
-                {subtask.title}
-              </span>
-            </label>
-          ))}
+          {task.subtasks.map((subtask) => {
+            const isPaused = subtask.status === "paused";
+            const canToggle = task.status === "in_progress" && !isPaused;
+
+            return (
+              <label
+                key={subtask.id}
+                className={`flex items-center gap-2 text-sm ${
+                  canToggle ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={subtask.status === "completed"}
+                  disabled={!canToggle || busy}
+                  onChange={() => onToggleSubtask(subtask.id)}
+                  className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className={subtask.status === "completed" ? "text-slate-400 line-through" : "text-slate-700"}>
+                  {subtask.title}
+                </span>
+                {subtask.isEdited && (
+                  <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                    Edited
+                  </span>
+                )}
+                {subtask.isAddedLater && (
+                  <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                    New
+                  </span>
+                )}
+                {isPaused && (
+                  <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-500">
+                    Paused
+                  </span>
+                )}
+              </label>
+            );
+          })}
         </div>
       )}
 

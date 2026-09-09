@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createProject,
   deleteProject,
+  getProjectAnalytics,
   getProjects,
   updateProject,
 } from "../services/projectService";
@@ -9,10 +10,18 @@ import type { Project, ProjectFormInput } from "../types/project";
 
 export const projectKeys = {
   list: ["projects"] as const,
+  analytics: (projectId: number) => ["projects", projectId, "analytics"] as const,
 };
 
 export const useProjectsQuery = (enabled = true) =>
   useQuery({ queryKey: projectKeys.list, queryFn: getProjects, enabled });
+
+export const useProjectAnalyticsQuery = (projectId: number | null, enabled = true) =>
+  useQuery({
+    queryKey: projectKeys.analytics(projectId ?? 0),
+    queryFn: () => getProjectAnalytics(projectId as number),
+    enabled: enabled && projectId != null,
+  });
 
 export const useCreateProjectMutation = () => {
   const queryClient = useQueryClient();
