@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, Download, Search, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { CheckCircle2, ClipboardList, Download, Eye, Search, XCircle } from "lucide-react";
 import { approveTask, getTasks, rejectTask } from "../../services/taskService";
 import { getProjects } from "../../services/projectService";
+import Modal from "../../components/common/Modal";
 import type { Task, TaskPriority, TaskStatus } from "../../types/task";
 import type { Project } from "../../types/project";
 
@@ -39,6 +40,8 @@ const priorityStyles: Record<TaskPriority, string> = {
   urgent: "bg-red-100 text-red-700",
 };
 
+const formatDate = (value: string | null) => (value ? value.slice(0, 19).replace("T", " ") : "-");
+
 const priorityLabels: Record<TaskPriority, string> = {
   low: "Low",
   medium: "Medium",
@@ -58,6 +61,7 @@ const Contributions = () => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [actionTaskId, setActionTaskId] = useState<number | null>(null);
+  const [viewTask, setViewTask] = useState<Task | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -391,12 +395,12 @@ const Contributions = () => {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+                        {/* <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
                           <div
                             className="h-full rounded-full bg-blue-600"
                             style={{ width: `${task.progress}%` }}
                           />
-                        </div>
+                        </div> */}
                         <span className="text-xs font-medium text-slate-600">{task.progress}%</span>
                       </div>
                     </td>
@@ -406,30 +410,40 @@ const Contributions = () => {
                     </td>
 
                     <td className="px-6 py-4">
-                      {task.status === "submitted" ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleApprove(task)}
-                            disabled={actionTaskId === task.id}
-                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
-                          >
-                            <CheckCircle2 size={14} />
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleReject(task)}
-                            disabled={actionTaskId === task.id}
-                            className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
-                          >
-                            <XCircle size={14} />
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-400">-</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setViewTask(task)}
+                           title="View"
+                          className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                        >
+                          <Eye size={14} />
+                          
+                        </button>
+
+                        {task.status === "submitted" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(task)}  title="Approve"
+                              disabled={actionTaskId === task.id}
+                              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              <CheckCircle2 size={14} />
+                              
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReject(task)} title="Reject"
+                              disabled={actionTaskId === task.id}
+                              className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+                            >
+                              <XCircle size={14} />
+                              
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -437,9 +451,94 @@ const Contributions = () => {
           </table>
         </div>
       </div>
+
+      <Modal open={!!viewTask} onClose={() => setViewTask(null)} title="Task Details">
+        {viewTask && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-base font-semibold text-slate-900">{viewTask.title}</p>
+              {viewTask.description && (
+                <p className="mt-1 text-sm text-slate-600">{viewTask.description}</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <DetailRow label="Employee" value={viewTask.assignedTo?.name ?? "Unassigned"} />
+              <DetailRow label="Project" value={viewTask.projectName ?? "-"} />
+              <DetailRow
+                label="Priority"
+                value={
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${priorityStyles[viewTask.priority]}`}>
+                    {priorityLabels[viewTask.priority]}
+                  </span>
+                }
+              />
+              <DetailRow
+                label="Status"
+                value={
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[viewTask.status]}`}>
+                    {statusLabels[viewTask.status]}
+                  </span>
+                }
+              />
+              <DetailRow label="Progress" value={`${viewTask.progress}%`} />
+              <DetailRow label="Due Date" value={viewTask.dueDate ?? "-"} />
+              <DetailRow label="Submitted At" value={formatDate(viewTask.submittedAt)} />
+              <DetailRow label="Approved At" value={formatDate(viewTask.approvedAt)} />
+              {viewTask.status === "rejected" && (
+                <>
+                  <DetailRow label="Rejected By" value={viewTask.rejectedBy?.name ?? "-"} />
+                  <DetailRow label="Rejected At" value={formatDate(viewTask.rejectedAt)} />
+                </>
+              )}
+            </div>
+
+            {viewTask.status === "rejected" && viewTask.rejectionReason && (
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                <span className="font-semibold">Rejection reason: </span>
+                {viewTask.rejectionReason}
+              </div>
+            )}
+
+            {viewTask.subtasks.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Sub-tasks ({viewTask.subtasks.filter((s) => s.status === "completed").length}/
+                  {viewTask.subtasks.length} done)
+                </p>
+                <ul className="space-y-1.5">
+                  {viewTask.subtasks.map((subtask) => (
+                    <li
+                      key={subtask.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"
+                    >
+                      <span className="text-sm text-slate-700">{subtask.title}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[subtask.status]}`}>
+                        {statusLabels[subtask.status]}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
+
+interface DetailRowProps {
+  label: string;
+  value: ReactNode;
+}
+
+const DetailRow = ({ label, value }: DetailRowProps) => (
+  <div>
+    <p className="text-xs text-slate-400">{label}</p>
+    <p className="mt-0.5 text-sm font-medium text-slate-700">{value}</p>
+  </div>
+);
 
 interface StatCardProps {
   label: string;

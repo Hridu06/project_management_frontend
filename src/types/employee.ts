@@ -4,6 +4,7 @@ export type EmployeeStatus = "active" | "inactive";
 
 export interface Employee {
   id: string;
+  userId: number | null;
   name: string;
   email: string;
   phone: string;
@@ -17,7 +18,6 @@ export interface Employee {
   status: EmployeeStatus;
   isManager: boolean;
   hasUserAccount: boolean;
-  userId: number | null;
 }
 
 export interface EmployeeFormInput {

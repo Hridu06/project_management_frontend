@@ -4,6 +4,7 @@ import type { UserRole } from "../types/user";
 
 interface ApiEmployee {
   id: number;
+  user_id: number | null;
   full_name: string;
   email: string;
   phone: string | null;
@@ -12,7 +13,6 @@ interface ApiEmployee {
   designation: { id: number; name: string } | null;
   role: UserRole | null;
   has_user_account: boolean;
-  user_id: number | null;
   joining_date: string | null;
   status: Employee["status"];
   is_manager: boolean;
@@ -40,6 +40,7 @@ export interface MyProfileInput {
 
 const toEmployee = (data: ApiEmployee): Employee => ({
   id: String(data.id),
+  userId: data.user_id ?? null,
   name: data.full_name,
   email: data.email,
   phone: data.phone ?? "",
@@ -53,7 +54,6 @@ const toEmployee = (data: ApiEmployee): Employee => ({
   status: data.status,
   isManager: data.is_manager,
   hasUserAccount: data.has_user_account,
-  userId: data.user_id,
 });
 
 const toFormData = (input: EmployeeFormInput): FormData => {
