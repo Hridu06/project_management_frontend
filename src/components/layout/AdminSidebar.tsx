@@ -281,7 +281,7 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
                 </div>
               </div>
 
-              {group.label === "Management" && canManageProjects && (
+              {/* {group.label === "Management" && canManageProjects && (
                 // Projects — dynamic list of created projects with per-project
                 // Tasks/Calendar/Analytics/Settings sub-menu, mirroring the
                 // product's project tabs so work can be jumped to directly.
@@ -359,7 +359,7 @@ const AdminSidebar = ({ open, onClose }: AdminSidebarProps) => {
                     </div>
                   )}
                 </div>
-              )}
+              )} */}
             </Fragment>
           ))}
         </nav>

@@ -3,18 +3,21 @@ import { Link } from "react-router-dom";
 import {
   Eye,
   FolderKanban,
+  Pencil,
   Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
   useCreateProjectMutation,
+  useDeleteProjectMutation,
   useProjectsQuery,
   useUpdateProjectMutation,
 } from "../../hooks/useProjectQueries";
 import { useTeamsQuery } from "../../hooks/useTeamQueries";
 import { useAuth } from "../../context/AuthContext";
-import type { ProjectFormInput, ProjectStatus } from "../../types/project";
+import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
 
 const emptyForm: ProjectFormInput = {
   name: "",
@@ -55,6 +58,7 @@ const Projects = () => {
   const teamsQuery = useTeamsQuery();
   const createProjectMutation = useCreateProjectMutation();
   const updateProjectMutation = useUpdateProjectMutation();
+  const deleteProjectMutation = useDeleteProjectMutation();
 
   const projects = projectsQuery.data ?? [];
   const teams = teamsQuery.data ?? [];
@@ -86,6 +90,24 @@ const Projects = () => {
     setModalOpen(true);
   };
 
+  const openEditModal = (project: Project) => {
+    setEditingId(project.id);
+    setForm({
+      name: project.name,
+      client: project.client ?? "",
+      description: project.description,
+      status: project.status,
+      startDate: project.startDate,
+      endDate: project.endDate ?? "",
+      progress: project.progress,
+      pdfFile: null,
+      githubLink: project.githubLink ?? "",
+      teamId: project.teamId,
+    });
+    setCurrentPdfUrl(project.pdf);
+    setModalOpen(true);
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -98,6 +120,16 @@ const Projects = () => {
 
     setSaving(false);
     setModalOpen(false);
+  };
+
+  const handleDelete = async (project: Project) => {
+    const confirmed = window.confirm(
+      `Delete ${project.name}? This cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    await deleteProjectMutation.mutateAsync(project.id);
   };
 
   return (
@@ -236,7 +268,7 @@ const Projects = () => {
                   <Eye size={16} />
                 </Link>
 
-                {/* {canManageProjects && (
+                {canManageProjects && (
                   <button
                     type="button"
                     onClick={() => openEditModal(project)}
@@ -245,9 +277,9 @@ const Projects = () => {
                   >
                     <Pencil size={16} />
                   </button>
-                )} */}
+                )}
 
-                {/* {isAdmin && (
+                {isAdmin && (
                   <button
                     type="button"
                     onClick={() => handleDelete(project)}
@@ -256,7 +288,7 @@ const Projects = () => {
                   >
                     <Trash2 size={16} />
                   </button>
-                )} */}
+                )}
               </div>
             </div>
           ))}
