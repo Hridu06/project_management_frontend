@@ -4,24 +4,26 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  CheckCircle2,
   Clock3,
   FolderKanban,
+  ListChecks,
   Mail,
   Pencil,
   Phone,
   PlaneTakeoff,
-  UserCheck,
   UserCircle,
   X,
 } from "lucide-react";
 import { getEmployees, updateEmployee } from "../../services/employeeService";
 import { getProjects } from "../../services/projectService";
-import { getContributions } from "../../services/contributionService";
+import { getTasks } from "../../services/taskService";
 import { getAttendanceRecords, formatDuration } from "../../services/attendanceService";
 import { getLeaveRequests, countLeaveDays } from "../../services/leaveService";
 import type { Employee } from "../../types/employee";
 import type { Project } from "../../types/project";
-import type { AttendanceRecord, AttendanceStatus, Contribution } from "../../types/attendance";
+import type { Task } from "../../types/task";
+import type { AttendanceRecord, AttendanceStatus } from "../../types/attendance";
 import type { LeaveRequest, LeaveStatus } from "../../types/leave";
 import type { UserRole } from "../../types/user";
 
@@ -57,18 +59,13 @@ const leaveStatusLabels: Record<LeaveStatus, string> = {
   rejected: "Rejected",
 };
 
-const toMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
-
 const EmployeeProfile = () => {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,20 +78,17 @@ const EmployeeProfile = () => {
     const load = async () => {
       if (!employeeId) return;
 
-      const [employeeList, projectList, contributionList, attendanceList, leaveList] =
-        await Promise.all([
-          getEmployees(),
-          getProjects(),
-          getContributions(),
-          getAttendanceRecords(),
-          getLeaveRequests(),
-        ]);
+      const [employeeList, projectList, attendanceList, leaveList] = await Promise.all([
+        getEmployees(),
+        getProjects(),
+        getAttendanceRecords(),
+        getLeaveRequests(),
+      ]);
 
       const found = employeeList.find((item) => item.id === employeeId) ?? null;
 
       setEmployee(found);
       setProjects(projectList);
-      setContributions(contributionList.filter((item) => item.employeeId === employeeId));
       setAttendanceRecords(
         attendanceList.filter((record) => record.employeeId === employeeId),
       );
@@ -102,6 +96,11 @@ const EmployeeProfile = () => {
 
       if (found) {
         setPersonalForm({ name: found.name, email: found.email, phone: found.phone });
+
+        // Real, live task data for this employee — requires their linked
+        // user account id (assigned_to on tasks is a users.id, not the
+        // employees.id used in the route param above).
+        setTasks(found.userId ? await getTasks({ assignedTo: found.userId }) : []);
       }
 
       setLoading(false);
@@ -117,23 +116,23 @@ const EmployeeProfile = () => {
     );
   }, [projects, employee]);
 
+  const taskCompletedCount = useMemo(
+    () => tasks.filter((task) => task.status === "completed").length,
+    [tasks],
+  );
+
   const projectContributions = useMemo(() => {
     return assignedProjects.map((project) => {
-      const items = contributions.filter(
-        (item) => item.projectId === String(project.id),
-      );
-      const totalMinutes = items.reduce(
-        (sum, item) => sum + Math.max(toMinutes(item.endTime) - toMinutes(item.startTime), 0),
-        0,
-      );
+      const items = tasks.filter((task) => task.projectId === project.id);
+      const completed = items.filter((task) => task.status === "completed").length;
 
       return {
         project,
         entries: items.length,
-        totalMinutes,
+        completed,
       };
     });
-  }, [assignedProjects, contributions]);
+  }, [assignedProjects, tasks]);
 
   const attendanceSummary = useMemo(() => {
     return attendanceRecords.reduce(
@@ -280,15 +279,15 @@ const EmployeeProfile = () => {
             bg="bg-violet-50"
           />
           <StatCard
-            icon={<Clock3 size={18} className="text-blue-500" />}
-            label="Total Hours"
-            value={formatDuration(attendanceSummary.totalMinutes)}
+            icon={<ListChecks size={18} className="text-blue-500" />}
+            label="Total Tasks"
+            value={String(tasks.length)}
             bg="bg-blue-50"
           />
           <StatCard
-            icon={<UserCheck size={18} className="text-emerald-500" />}
-            label="Present Days"
-            value={String(attendanceSummary.present)}
+            icon={<CheckCircle2 size={18} className="text-emerald-500" />}
+            label="Completed Tasks"
+            value={String(taskCompletedCount)}
             bg="bg-emerald-50"
           />
           <StatCard
@@ -470,7 +469,7 @@ const EmployeeProfile = () => {
         <div className="border-b border-slate-200 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">Projects & Contribution</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Projects this employee works on and their logged contribution.
+            Projects this employee works on and their live task progress.
           </p>
         </div>
 
@@ -482,10 +481,10 @@ const EmployeeProfile = () => {
                   Project
                 </th>
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Entries
+                  Tasks
                 </th>
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Contribution
+                  Completed
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
@@ -502,7 +501,7 @@ const EmployeeProfile = () => {
                 </tr>
               )}
 
-              {projectContributions.map(({ project, entries, totalMinutes }) => (
+              {projectContributions.map(({ project, entries, completed }) => (
                 <tr key={project.id} className="border-b border-slate-100 last:border-0">
                   <td className="px-6 py-4">
                     <Link
@@ -514,7 +513,7 @@ const EmployeeProfile = () => {
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">{entries}</td>
                   <td className="px-6 py-4 text-sm font-medium text-slate-700">
-                    {formatDuration(totalMinutes)}
+                    {completed}/{entries}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-slate-600">

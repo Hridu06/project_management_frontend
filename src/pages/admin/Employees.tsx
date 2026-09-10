@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { Eye, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
   createEmployee,
@@ -281,9 +281,18 @@ const Employees = () => {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-1">
+                        <Link
+                          to={`/app/employees/${employee.id}`}
+                          title="View"
+                          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-emerald-600"
+                          aria-label={`View ${employee.name}`}
+                        >
+                          <Eye size={16} />
+                        </Link>
+
                         <button
                           type="button"
-                          onClick={() => openEditModal(employee)}
+                          onClick={() => openEditModal(employee)} title="Edit"
                           className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
                           aria-label={`Edit ${employee.name}`}
                         >
@@ -292,7 +301,7 @@ const Employees = () => {
 
                         <button
                           type="button"
-                          onClick={() => handleDelete(employee)}
+                          onClick={() => handleDelete(employee)} title="Delete"
                           className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
                           aria-label={`Delete ${employee.name}`}
                         >

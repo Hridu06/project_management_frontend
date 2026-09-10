@@ -4,16 +4,16 @@ import {
   Building2,
   Calendar,
   Check,
-  Clock3,
+  CheckCircle2,
   FolderKanban,
   KeyRound,
+  ListChecks,
   Loader2,
   Mail,
   Pencil,
   Phone,
   PlaneTakeoff,
   ShieldCheck,
-  UserCheck,
   UserCircle,
   X,
 } from "lucide-react";
@@ -21,7 +21,7 @@ import { useAuth } from "../../context/AuthContext";
 import ChangePasswordModal from "../../components/common/ChangePasswordModal";
 import { getMyProfile, updateMyProfile } from "../../services/employeeService";
 import { getProjects } from "../../services/projectService";
-import { getAttendanceRecords, formatDuration } from "../../services/attendanceService";
+import { getTasks } from "../../services/taskService";
 import { getLeaveRequests, countLeaveDays } from "../../services/leaveService";
 import type { Employee } from "../../types/employee";
 import type { UserRole } from "../../types/user";
@@ -37,11 +37,7 @@ const EmployeeMyProfile = () => {
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [assignedProjectCount, setAssignedProjectCount] = useState(0);
-  const [attendanceSummary, setAttendanceSummary] = useState({
-    totalMinutes: 0,
-    present: 0,
-    late: 0,
-  });
+  const [taskSummary, setTaskSummary] = useState({ total: 0, completed: 0 });
   const [approvedLeaveDays, setApprovedLeaveDays] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -57,14 +53,21 @@ const EmployeeMyProfile = () => {
     const load = async () => {
       setLoading(true);
 
-      const [profile, projects, attendanceRecords, leaveRequests] = await Promise.all([
+      // getTasks() with no filter is auto-scoped server-side to the
+      // signed-in employee's own assignments, so this always reflects the
+      // latest status (e.g. right after a task is submitted/approved).
+      const [profile, projects, myTasks, leaveRequests] = await Promise.all([
         getMyProfile(),
         getProjects(),
-        getAttendanceRecords(),
+        getTasks(),
         getLeaveRequests(),
       ]);
 
       setEmployee(profile);
+      setTaskSummary({
+        total: myTasks.length,
+        completed: myTasks.filter((task) => task.status === "completed").length,
+      });
 
       if (profile) {
         setForm({ name: profile.name, email: profile.email, phone: profile.phone });
@@ -75,15 +78,6 @@ const EmployeeMyProfile = () => {
             project.members.some((member) => member.email === profile.email),
           ).length,
         );
-
-        const myAttendance = attendanceRecords.filter(
-          (record) => record.employeeId === employeeId,
-        );
-        setAttendanceSummary({
-          totalMinutes: myAttendance.reduce((sum, record) => sum + record.totalMinutes, 0),
-          present: myAttendance.filter((record) => record.status === "present").length,
-          late: myAttendance.filter((record) => record.status === "late").length,
-        });
 
         const myLeaves = leaveRequests.filter((leave) => leave.employeeId === employeeId);
         setApprovedLeaveDays(
@@ -224,15 +218,15 @@ const EmployeeMyProfile = () => {
             bg="bg-violet-50"
           />
           <StatCard
-            icon={<Clock3 size={18} className="text-blue-500" />}
-            label="Total Hours"
-            value={formatDuration(attendanceSummary.totalMinutes)}
+            icon={<ListChecks size={18} className="text-blue-500" />}
+            label="Total Tasks"
+            value={String(taskSummary.total)}
             bg="bg-blue-50"
           />
           <StatCard
-            icon={<UserCheck size={18} className="text-emerald-500" />}
-            label="Present Days"
-            value={String(attendanceSummary.present)}
+            icon={<CheckCircle2 size={18} className="text-emerald-500" />}
+            label="Completed Tasks"
+            value={String(taskSummary.completed)}
             bg="bg-emerald-50"
           />
           <StatCard

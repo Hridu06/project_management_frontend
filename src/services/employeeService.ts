@@ -4,6 +4,7 @@ import type { UserRole } from "../types/user";
 
 interface ApiEmployee {
   id: number;
+  user_id: number | null;
   full_name: string;
   email: string;
   phone: string | null;
@@ -39,6 +40,7 @@ export interface MyProfileInput {
 
 const toEmployee = (data: ApiEmployee): Employee => ({
   id: String(data.id),
+  userId: data.user_id ?? null,
   name: data.full_name,
   email: data.email,
   phone: data.phone ?? "",
