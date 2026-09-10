@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import type {
+  ContributionFormInput,
   Task,
   TaskActivity,
   TaskFormInput,
@@ -23,6 +24,11 @@ interface ApiTask {
   started_at: string | null;
   submitted_at: string | null;
   approved_at: string | null;
+  rejected_at: string | null;
+  rejected_by: TaskPersonRef | null;
+  rejection_reason: string | null;
+  is_edited: boolean;
+  is_added_later: boolean;
   subtasks: ApiTask[];
   created_at: string;
   updated_at: string;
@@ -68,6 +74,11 @@ const toTask = (data: ApiTask): Task => ({
   startedAt: data.started_at,
   submittedAt: data.submitted_at,
   approvedAt: data.approved_at,
+  rejectedAt: data.rejected_at,
+  rejectedBy: data.rejected_by,
+  rejectionReason: data.rejection_reason,
+  isEdited: data.is_edited,
+  isAddedLater: data.is_added_later,
   subtasks: (data.subtasks ?? []).map(toTask),
   createdAt: data.created_at,
   updatedAt: data.updated_at,
@@ -163,9 +174,62 @@ export const approveTask = async (id: number): Promise<Task> => {
   return toTask(data.task);
 };
 
+export const rejectTask = async (id: number, reason?: string): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${id}/reject`, {
+    method: "POST",
+    body: reason ? { reason } : undefined,
+  });
+
+  return toTask(data.task);
+};
+
+export const contributeTask = async (input: ContributionFormInput): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>("/tasks/contribute", {
+    method: "POST",
+    body: {
+      project_id: input.projectId,
+      title: input.title,
+      description: input.description || null,
+    },
+  });
+
+  return toTask(data.task);
+};
+
 export const toggleSubtask = async (taskId: number, subtaskId: number): Promise<Task> => {
   const data = await apiRequest<TaskResponse>(
     `/tasks/${taskId}/subtasks/${subtaskId}/toggle`,
+    { method: "POST" },
+  );
+
+  return toTask(data.task);
+};
+
+export const addSubtask = async (taskId: number, title: string): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${taskId}/subtasks`, {
+    method: "POST",
+    body: { title },
+  });
+
+  return toTask(data.task);
+};
+
+export const updateSubtask = async (
+  taskId: number,
+  subtaskId: number,
+  title: string,
+): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${taskId}/subtasks/${subtaskId}`, {
+    method: "PUT",
+    body: { title },
+  });
+
+  return toTask(data.task);
+};
+
+export const pauseSubtask = async (taskId: number, subtaskId: number): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(
+    `/tasks/${taskId}/subtasks/${subtaskId}/pause`,
     { method: "POST" },
   );
 

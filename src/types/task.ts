@@ -1,4 +1,10 @@
-export type TaskStatus = "not_started" | "in_progress" | "submitted" | "completed";
+export type TaskStatus =
+  | "not_started"
+  | "in_progress"
+  | "submitted"
+  | "completed"
+  | "rejected"
+  | "paused";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export interface TaskPersonRef {
@@ -23,6 +29,11 @@ export interface Task {
   startedAt: string | null;
   submittedAt: string | null;
   approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectedBy: TaskPersonRef | null;
+  rejectionReason: string | null;
+  isEdited: boolean;
+  isAddedLater: boolean;
   subtasks: Task[];
   createdAt: string;
   updatedAt: string;
@@ -34,7 +45,12 @@ export type TaskActivityAction =
   | "subtask_toggled"
   | "submitted"
   | "approved"
-  | "reassigned";
+  | "rejected"
+  | "reassigned"
+  | "subtask_added"
+  | "subtask_edited"
+  | "subtask_paused"
+  | "subtask_resumed";
 
 export interface TaskActivity {
   id: number;
@@ -62,4 +78,10 @@ export interface TaskUpdateInput {
   priority: TaskPriority;
   assignedTo: number;
   dueDate: string;
+}
+
+export interface ContributionFormInput {
+  projectId: number;
+  title: string;
+  description: string;
 }

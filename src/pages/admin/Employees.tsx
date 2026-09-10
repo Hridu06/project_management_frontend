@@ -180,6 +180,9 @@ const Employees = () => {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  SL
+                </th>
+                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Employee
                 </th>
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -203,7 +206,7 @@ const Employees = () => {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-slate-400">
                     Loading employees...
                   </td>
                 </tr>
@@ -211,7 +214,7 @@ const Employees = () => {
 
               {!loading && filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-14">
+                  <td colSpan={7} className="px-6 py-14">
                     <div className="flex flex-col items-center gap-2 text-center">
                       <Users size={22} className="text-slate-300" />
                       <p className="text-sm font-medium text-slate-500">
@@ -223,11 +226,15 @@ const Employees = () => {
               )}
 
               {!loading &&
-                filteredEmployees.map((employee) => (
+                filteredEmployees.map((employee, index) => (
                   <tr
                     key={employee.id}
                     className="border-b border-slate-100 last:border-0"
                   >
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {index + 1}
+                    </td>
+
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">

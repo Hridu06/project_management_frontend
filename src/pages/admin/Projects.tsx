@@ -1,24 +1,20 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   Eye,
   FolderKanban,
-  Pencil,
   Plus,
   Search,
-  Trash2,
 } from "lucide-react";
 import Modal from "../../components/common/Modal";
 import {
-  createProject,
-  deleteProject,
-  getProjects,
-  updateProject,
-} from "../../services/projectService";
-import { getTeamList } from "../../services/teamService";
+  useCreateProjectMutation,
+  useProjectsQuery,
+  useUpdateProjectMutation,
+} from "../../hooks/useProjectQueries";
+import { useTeamsQuery } from "../../hooks/useTeamQueries";
 import { useAuth } from "../../context/AuthContext";
-import type { Project, ProjectFormInput, ProjectStatus } from "../../types/project";
-import type { Team } from "../../types/team";
+import type { ProjectFormInput, ProjectStatus } from "../../types/project";
 
 const emptyForm: ProjectFormInput = {
   name: "",
@@ -55,9 +51,14 @@ const Projects = () => {
   // admin-only. Employees get a read-only view.
   const canManageProjects = isAdmin || isManager;
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
+  const projectsQuery = useProjectsQuery();
+  const teamsQuery = useTeamsQuery();
+  const createProjectMutation = useCreateProjectMutation();
+  const updateProjectMutation = useUpdateProjectMutation();
+
+  const projects = projectsQuery.data ?? [];
+  const teams = teamsQuery.data ?? [];
+  const loading = projectsQuery.isLoading || teamsQuery.isLoading;
   const [search, setSearch] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -65,21 +66,6 @@ const Projects = () => {
   const [form, setForm] = useState<ProjectFormInput>(emptyForm);
   const [currentPdfUrl, setCurrentPdfUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      const [projectList, teamList] = await Promise.all([
-        getProjects(),
-        getTeamList(),
-      ]);
-
-      setProjects(projectList);
-      setTeams(teamList);
-      setLoading(false);
-    };
-
-    load();
-  }, []);
 
   const filteredProjects = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -100,51 +86,18 @@ const Projects = () => {
     setModalOpen(true);
   };
 
-  const openEditModal = (project: Project) => {
-    setEditingId(project.id);
-    setForm({
-      name: project.name,
-      client: project.client ?? "",
-      description: project.description,
-      status: project.status,
-      startDate: project.startDate,
-      endDate: project.endDate ?? "",
-      progress: project.progress,
-      pdfFile: null,
-      githubLink: project.githubLink ?? "",
-      teamId: project.teamId,
-    });
-    setCurrentPdfUrl(project.pdf);
-    setModalOpen(true);
-  };
-
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
 
     if (editingId) {
-      const updated = await updateProject(editingId, form);
-      setProjects((prev) =>
-        prev.map((project) => (project.id === editingId ? updated : project)),
-      );
+      await updateProjectMutation.mutateAsync({ id: editingId, input: form });
     } else {
-      const created = await createProject(form);
-      setProjects((prev) => [created, ...prev]);
+      await createProjectMutation.mutateAsync(form);
     }
 
     setSaving(false);
     setModalOpen(false);
-  };
-
-  const handleDelete = async (project: Project) => {
-    const confirmed = window.confirm(
-      `Delete "${project.name}"? This cannot be undone.`,
-    );
-
-    if (!confirmed) return;
-
-    await deleteProject(project.id);
-    setProjects((prev) => prev.filter((item) => item.id !== project.id));
   };
 
   return (

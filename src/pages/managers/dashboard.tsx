@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ChartBar,
   FolderKanban,
@@ -8,10 +8,10 @@ import {
   Users2,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { getTeamList } from "../../services/teamService";
-import { getProjects } from "../../services/projectService";
-import type { Team, TeamMember } from "../../types/team";
-import type { Project, ProjectStatus } from "../../types/project";
+import { useTeamsQuery } from "../../hooks/useTeamQueries";
+import { useProjectsQuery } from "../../hooks/useProjectQueries";
+import type { TeamMember } from "../../types/team";
+import type { ProjectStatus } from "../../types/project";
 
 const projectStatusStyles: Record<ProjectStatus, string> = {
   active: "bg-emerald-50 text-emerald-600",
@@ -29,34 +29,12 @@ const roleLabels: Record<TeamMember["role"], string> = {
 const ManagerDashboard = () => {
   const { user } = useAuth();
 
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const teamsQuery = useTeamsQuery();
+  const projectsQuery = useProjectsQuery();
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      setLoading(true);
-
-      const [teamData, projectData] = await Promise.all([
-        getTeamList(),
-        getProjects(),
-      ]);
-
-      if (cancelled) return;
-
-      setTeams(teamData);
-      setProjects(projectData);
-      setLoading(false);
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const teams = teamsQuery.data ?? [];
+  const projects = projectsQuery.data ?? [];
+  const loading = teamsQuery.isLoading || projectsQuery.isLoading;
 
   // A manager's scope is the teams they're assigned to lead, and whatever
   // projects are linked to those teams — there's no direct manager-to-project

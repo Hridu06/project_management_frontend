@@ -1,3 +1,5 @@
+import type { TaskStatus } from "./task";
+
 export type ProjectStatus = "active" | "completed" | "on_hold" | "archived";
 
 export interface ProjectMember {
@@ -53,4 +55,27 @@ export interface MyProjectSummary {
   myProgress: number;
   contributionPercent: number;
   lastActivityAt: string | null;
+}
+
+export interface TaskStatusBreakdownItem {
+  status: TaskStatus;
+  count: number;
+  percent: number;
+}
+
+// A single assignee's share of the project's assigned tasks (e.g. "User A
+// did 10 of 15 (67%)"), computed server-side so the frontend just renders it.
+export interface AssigneeBreakdownItem {
+  id: number;
+  name: string;
+  total: number;
+  completed: number;
+  percent: number;
+}
+
+export interface ProjectAnalytics {
+  total: number;
+  totalAssigned: number;
+  taskStatusBreakdown: TaskStatusBreakdownItem[];
+  assigneeBreakdown: AssigneeBreakdownItem[];
 }

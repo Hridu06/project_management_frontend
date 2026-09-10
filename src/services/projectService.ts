@@ -1,9 +1,12 @@
 import { apiRequest } from "./api";
 import type {
+  AssigneeBreakdownItem,
   MyProjectSummary,
   Project,
+  ProjectAnalytics,
   ProjectFormInput,
   ProjectMember,
+  TaskStatusBreakdownItem,
 } from "../types/project";
 
 interface ApiProject {
@@ -136,4 +139,36 @@ const toMyProjectSummary = (data: ApiMyProjectSummary): MyProjectSummary => ({
 export const getMyProjectsSummary = async (): Promise<MyProjectSummary[]> => {
   const data = await apiRequest<MyProjectsSummaryResponse>("/projects/my-summary");
   return data.projects.map(toMyProjectSummary);
+};
+
+interface ApiTaskStatusBreakdownItem {
+  status: TaskStatusBreakdownItem["status"];
+  count: number;
+  percent: number;
+}
+
+interface ApiAssigneeBreakdownItem {
+  id: number;
+  name: string;
+  total: number;
+  completed: number;
+  percent: number;
+}
+
+interface ProjectAnalyticsResponse {
+  total: number;
+  total_assigned: number;
+  task_status_breakdown: ApiTaskStatusBreakdownItem[];
+  assignee_breakdown: ApiAssigneeBreakdownItem[];
+}
+
+export const getProjectAnalytics = async (projectId: number): Promise<ProjectAnalytics> => {
+  const data = await apiRequest<ProjectAnalyticsResponse>(`/projects/${projectId}/analytics`);
+
+  return {
+    total: data.total,
+    totalAssigned: data.total_assigned,
+    taskStatusBreakdown: data.task_status_breakdown,
+    assigneeBreakdown: data.assignee_breakdown as AssigneeBreakdownItem[],
+  };
 };
