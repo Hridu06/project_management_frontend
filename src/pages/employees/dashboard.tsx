@@ -92,22 +92,15 @@ const EmployeeDashboard = () => {
     };
   }, []);
 
-  const myAttendance = useMemo(
-    () =>
-      employeeId
-        ? attendanceRecords.filter((record) => record.employeeId === employeeId)
-        : [],
-    [attendanceRecords, employeeId],
-  );
+  // getAttendanceRecords() is already scoped server-side to the signed-in
+  // employee's own check-ins — no client-side filter needed.
+  const myAttendance = attendanceRecords;
 
+  // getLeaveRequests() is already scoped server-side to the signed-in
+  // employee's own requests — no client-side filter needed.
   const myLeaveRequests = useMemo(
-    () =>
-      employeeId
-        ? [...leaveRequests]
-            .filter((leave) => leave.employeeId === employeeId)
-            .sort((a, b) => b.appliedOn.localeCompare(a.appliedOn))
-        : [],
-    [leaveRequests, employeeId],
+    () => [...leaveRequests].sort((a, b) => b.appliedAt.localeCompare(a.appliedAt)),
+    [leaveRequests],
   );
 
   const recentTasks = useMemo(

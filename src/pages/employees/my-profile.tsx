@@ -22,7 +22,7 @@ import ChangePasswordModal from "../../components/common/ChangePasswordModal";
 import { getMyProfile, updateMyProfile } from "../../services/employeeService";
 import { getProjects } from "../../services/projectService";
 import { getAttendanceRecords, formatDuration } from "../../services/attendanceService";
-import { getLeaveRequests, countLeaveDays } from "../../services/leaveService";
+import { getLeaveRequests } from "../../services/leaveService";
 import type { Employee } from "../../types/employee";
 import type { UserRole } from "../../types/user";
 
@@ -69,27 +69,29 @@ const EmployeeMyProfile = () => {
       if (profile) {
         setForm({ name: profile.name, email: profile.email, phone: profile.phone });
 
-        const employeeId = profile.id;
         setAssignedProjectCount(
           projects.filter((project) =>
             project.members.some((member) => member.email === profile.email),
           ).length,
         );
 
-        const myAttendance = attendanceRecords.filter(
-          (record) => record.employeeId === employeeId,
-        );
+        // getAttendanceRecords() is already scoped server-side to the
+        // signed-in employee's own check-ins.
         setAttendanceSummary({
-          totalMinutes: myAttendance.reduce((sum, record) => sum + record.totalMinutes, 0),
-          present: myAttendance.filter((record) => record.status === "present").length,
-          late: myAttendance.filter((record) => record.status === "late").length,
+          totalMinutes: attendanceRecords.reduce(
+            (sum, record) => sum + (record.totalMinutes ?? 0),
+            0,
+          ),
+          present: attendanceRecords.filter((record) => record.status === "present").length,
+          late: attendanceRecords.filter((record) => record.status === "late").length,
         });
 
-        const myLeaves = leaveRequests.filter((leave) => leave.employeeId === employeeId);
+        // getLeaveRequests() is already scoped server-side to the
+        // signed-in employee's own requests.
         setApprovedLeaveDays(
-          myLeaves
+          leaveRequests
             .filter((leave) => leave.status === "approved")
-            .reduce((sum, leave) => sum + countLeaveDays(leave.startDate, leave.endDate), 0),
+            .reduce((sum, leave) => sum + leave.days, 0),
         );
       }
 

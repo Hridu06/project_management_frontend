@@ -14,6 +14,7 @@ import EmployeeDashboard from "../pages/employees/dashboard";
 import EmployeeTasks from "../pages/employees/tasks";
 import EmployeeProjects from "../pages/employees/projects";
 import EmployeeContributions from "../pages/employees/contributions";
+import EmployeeLeave from "../pages/employees/leave";
 import EmployeeMyProfile from "../pages/employees/my-profile";
 import ManagerDashboard from "../pages/managers/dashboard";
 import Users from "../pages/admin/Users";
@@ -68,6 +69,16 @@ const AppRoutes = () => {
                 win the match for every role, bouncing managers to /login. */}
             <Route path="my-profile" element={<EmployeeMyProfile />} />
 
+            {/* Attendance is shared: every signed-in role can check
+                themselves in/out here; admin/manager additionally see every
+                employee's records and can open each one's monthly calendar
+                (both gated inside the pages themselves). */}
+            <Route path="attendance" element={<Attendance />} />
+            <Route
+              path="attendance/:userId"
+              element={<EmployeeAttendanceCalendar />}
+            />
+
             {/* The full projects list/management view is admin & manager
                 only — employees get their own scoped summary at
                 my-projects (see the employee-only block below) instead. */}
@@ -75,6 +86,10 @@ const AppRoutes = () => {
               <Route path="projects" element={<Projects />} />
               <Route path="projects/tasks" element={<TaskManager />} />
               <Route path="projects/contributions" element={<Contributions />} />
+              {/* Leave review: admins see/decide every request, managers
+                  see + first-approve their own team's (both scoped server-
+                  side and inside the page). */}
+              <Route path="leave" element={<Leave />} />
             </Route>
 
             {/* Employee-only */}
@@ -83,6 +98,7 @@ const AppRoutes = () => {
               <Route path="tasks" element={<EmployeeTasks />} />
               <Route path="my-projects" element={<EmployeeProjects />} />
               <Route path="my-contributions" element={<EmployeeContributions />} />
+              <Route path="my-leave" element={<EmployeeLeave />} />
             </Route>
 
             {/* Manager-only */}
@@ -97,12 +113,6 @@ const AppRoutes = () => {
               <Route path="employees/:employeeId" element={<EmployeeProfile />} />
               <Route path="users" element={<Users />} />
               <Route path="managers" element={<Managers />} />
-              <Route path="attendance" element={<Attendance />} />
-              <Route
-                path="attendance/:employeeId"
-                element={<EmployeeAttendanceCalendar />}
-              />
-              <Route path="leave" element={<Leave />} />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<Settings />} />
             </Route>

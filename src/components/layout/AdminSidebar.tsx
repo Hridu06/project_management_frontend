@@ -81,6 +81,12 @@ const navGroups: NavGroup[] = [
         roles: ["employee"],
       },
       {
+        to: "/app/my-leave",
+        label: "Leave",
+        icon: CalendarDays,
+        roles: ["employee"],
+      },
+      {
         to: "/app/my-profile",
         label: "My Profile",
         icon: UserCircle,
@@ -119,7 +125,7 @@ const navGroups: NavGroup[] = [
     label: "Operations",
     items: [
       { to: "/app/attendance", label: "Attendance", icon: Clock3 },
-      { to: "/app/leave", label: "Leave", icon: CalendarDays, roles: ["admin"] },
+      { to: "/app/leave", label: "Leave", icon: CalendarDays, roles: ["admin", "manager"] },
       { to: "/app/reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
     ],
   },

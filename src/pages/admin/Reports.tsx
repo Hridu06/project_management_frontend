@@ -4,12 +4,11 @@ import {
   formatDuration,
   getAttendanceRecords,
 } from "../../services/attendanceService";
-import { getEmployees } from "../../services/employeeService";
 import type { AttendanceRecord } from "../../types/attendance";
-import type { Employee } from "../../types/employee";
 
 interface EmployeeSummary {
-  employeeId: string;
+  userId: number;
+  name: string;
   recordedDays: number;
   presentDays: number;
   halfDays: number;
@@ -20,7 +19,6 @@ interface EmployeeSummary {
 
 const Reports = () => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -29,13 +27,9 @@ const Reports = () => {
 
   useEffect(() => {
     const load = async () => {
-      const [recordList, employeeList] = await Promise.all([
-        getAttendanceRecords(),
-        getEmployees(),
-      ]);
+      const recordList = await getAttendanceRecords();
 
       setRecords(recordList);
-      setEmployees(employeeList);
 
       if (recordList.length > 0) {
         const dates = recordList.map((record) => record.date).sort();
@@ -49,12 +43,6 @@ const Reports = () => {
     load();
   }, []);
 
-  const employeeMap = useMemo(() => {
-    const map = new Map<string, Employee>();
-    for (const employee of employees) map.set(employee.id, employee);
-    return map;
-  }, [employees]);
-
   const recordsInRange = useMemo(() => {
     return records.filter((record) => {
       if (fromDate && record.date < fromDate) return false;
@@ -64,11 +52,14 @@ const Reports = () => {
   }, [records, fromDate, toDate]);
 
   const summaries = useMemo(() => {
-    const map = new Map<string, EmployeeSummary>();
+    const map = new Map<number, EmployeeSummary>();
 
     for (const record of recordsInRange) {
-      const existing = map.get(record.employeeId) ?? {
-        employeeId: record.employeeId,
+      if (!record.user) continue;
+
+      const existing = map.get(record.user.id) ?? {
+        userId: record.user.id,
+        name: record.user.name,
         recordedDays: 0,
         presentDays: 0,
         halfDays: 0,
@@ -77,14 +68,22 @@ const Reports = () => {
         attendanceRate: 0,
       };
 
-      existing.recordedDays += 1;
-      existing.totalMinutes += record.totalMinutes;
+      existing.totalMinutes += record.totalMinutes ?? 0;
 
-      if (record.status === "present") existing.presentDays += 1;
-      else if (record.status === "half-day") existing.halfDays += 1;
-      else existing.absentDays += 1;
+      // A record with no status yet is still checked in today — leave it
+      // out of the day tallies until it resolves to a final outcome.
+      if (record.status === "present" || record.status === "late") {
+        existing.recordedDays += 1;
+        existing.presentDays += 1;
+      } else if (record.status === "half-day") {
+        existing.recordedDays += 1;
+        existing.halfDays += 1;
+      } else if (record.status === "absent") {
+        existing.recordedDays += 1;
+        existing.absentDays += 1;
+      }
 
-      map.set(record.employeeId, existing);
+      map.set(record.user.id, existing);
     }
 
     const list = [...map.values()].map((summary) => ({
@@ -100,18 +99,9 @@ const Reports = () => {
     const term = search.trim().toLowerCase();
 
     return list
-      .filter((summary) => {
-        if (!term) return true;
-        const name = employeeMap.get(summary.employeeId)?.name ?? "";
-        return name.toLowerCase().includes(term);
-      })
-      .sort(
-        (a, b) =>
-          (employeeMap.get(a.employeeId)?.name ?? "").localeCompare(
-            employeeMap.get(b.employeeId)?.name ?? "",
-          ),
-      );
-  }, [recordsInRange, search, employeeMap]);
+      .filter((summary) => !term || summary.name.toLowerCase().includes(term))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [recordsInRange, search]);
 
   const handleExport = () => {
     const header = [
@@ -125,7 +115,7 @@ const Reports = () => {
     ];
 
     const rows = summaries.map((summary) => [
-      employeeMap.get(summary.employeeId)?.name ?? "Unknown",
+      summary.name,
       summary.recordedDays,
       summary.presentDays,
       summary.halfDays,
@@ -258,20 +248,17 @@ const Reports = () => {
               {!loading &&
                 summaries.map((summary) => (
                   <tr
-                    key={summary.employeeId}
+                    key={summary.userId}
                     className="border-b border-slate-100 last:border-0"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
-                          {(employeeMap.get(summary.employeeId)?.name ?? "?")
-                            .charAt(0)
-                            .toUpperCase()}
+                          {summary.name.charAt(0).toUpperCase()}
                         </div>
 
                         <span className="text-sm font-medium text-slate-800">
-                          {employeeMap.get(summary.employeeId)?.name ??
-                            "Unknown"}
+                          {summary.name}
                         </span>
                       </div>
                     </td>

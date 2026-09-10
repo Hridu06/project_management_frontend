@@ -18,7 +18,7 @@ import { getEmployees, updateEmployee } from "../../services/employeeService";
 import { getProjects } from "../../services/projectService";
 import { getContributions } from "../../services/contributionService";
 import { getAttendanceRecords, formatDuration } from "../../services/attendanceService";
-import { getLeaveRequests, countLeaveDays } from "../../services/leaveService";
+import { getLeaveRequests } from "../../services/leaveService";
 import type { Employee } from "../../types/employee";
 import type { Project } from "../../types/project";
 import type { AttendanceRecord, AttendanceStatus, Contribution } from "../../types/attendance";
@@ -49,12 +49,14 @@ const leaveStatusStyles: Record<LeaveStatus, string> = {
   approved: "bg-emerald-50 text-emerald-600",
   pending: "bg-amber-50 text-amber-600",
   rejected: "bg-red-50 text-red-600",
+  cancelled: "bg-slate-100 text-slate-500",
 };
 
 const leaveStatusLabels: Record<LeaveStatus, string> = {
   approved: "Approved",
   pending: "Pending",
   rejected: "Rejected",
+  cancelled: "Cancelled",
 };
 
 const toMinutes = (time: string): number => {
@@ -81,24 +83,26 @@ const EmployeeProfile = () => {
     const load = async () => {
       if (!employeeId) return;
 
-      const [employeeList, projectList, contributionList, attendanceList, leaveList] =
-        await Promise.all([
-          getEmployees(),
-          getProjects(),
-          getContributions(),
-          getAttendanceRecords(),
-          getLeaveRequests(),
-        ]);
+      const [employeeList, projectList, contributionList] = await Promise.all([
+        getEmployees(),
+        getProjects(),
+        getContributions(),
+      ]);
 
       const found = employeeList.find((item) => item.id === employeeId) ?? null;
 
       setEmployee(found);
       setProjects(projectList);
       setContributions(contributionList.filter((item) => item.employeeId === employeeId));
+      // Attendance and leave are keyed by the linked login account, not the
+      // Employee directory id, so they're fetched separately once we know
+      // the userId.
       setAttendanceRecords(
-        attendanceList.filter((record) => record.employeeId === employeeId),
+        found?.userId != null ? await getAttendanceRecords({ userId: found.userId }) : [],
       );
-      setLeaveRequests(leaveList.filter((item) => item.employeeId === employeeId));
+      setLeaveRequests(
+        found?.userId != null ? await getLeaveRequests({ userId: found.userId }) : [],
+      );
 
       if (found) {
         setPersonalForm({ name: found.name, email: found.email, phone: found.phone });
@@ -138,8 +142,8 @@ const EmployeeProfile = () => {
   const attendanceSummary = useMemo(() => {
     return attendanceRecords.reduce(
       (acc, record) => {
-        acc[record.status] += 1;
-        acc.totalMinutes += record.totalMinutes;
+        if (record.status) acc[record.status] += 1;
+        acc.totalMinutes += record.totalMinutes ?? 0;
         return acc;
       },
       { present: 0, late: 0, "half-day": 0, absent: 0, totalMinutes: 0 } as Record<
@@ -152,7 +156,7 @@ const EmployeeProfile = () => {
   const leaveSummary = useMemo(() => {
     const approvedDays = leaveRequests
       .filter((item) => item.status === "approved")
-      .reduce((sum, item) => sum + countLeaveDays(item.startDate, item.endDate), 0);
+      .reduce((sum, item) => sum + item.days, 0);
 
     const pending = leaveRequests.filter((item) => item.status === "pending").length;
     const rejected = leaveRequests.filter((item) => item.status === "rejected").length;
@@ -536,14 +540,16 @@ const EmployeeProfile = () => {
               <h2 className="text-base font-semibold text-slate-900">Attendance</h2>
               <p className="mt-1 text-sm text-slate-500">Recent daily records.</p>
             </div>
-            <Link
-              to={`/app/attendance/${employee.id}`}
-              className="flex items-center gap-1.5 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
-              aria-label="View attendance calendar"
-              title="View attendance calendar"
-            >
-              <CalendarDays size={16} />
-            </Link>
+            {employee.userId != null && (
+              <Link
+                to={`/app/attendance/${employee.userId}`}
+                className="flex items-center gap-1.5 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                aria-label="View attendance calendar"
+                title="View attendance calendar"
+              >
+                <CalendarDays size={16} />
+              </Link>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -573,7 +579,7 @@ const EmployeeProfile = () => {
 
                 {attendanceRecords.slice(0, 8).map((record) => (
                   <tr
-                    key={record.date}
+                    key={record.id}
                     className="border-b border-slate-100 last:border-0"
                   >
                     <td className="px-6 py-4 text-sm text-slate-600">{record.date}</td>
@@ -581,11 +587,17 @@ const EmployeeProfile = () => {
                       {formatDuration(record.totalMinutes)}
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${attendanceStatusStyles[record.status]}`}
-                      >
-                        {attendanceStatusLabels[record.status]}
-                      </span>
+                      {record.status ? (
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${attendanceStatusStyles[record.status]}`}
+                        >
+                          {attendanceStatusLabels[record.status]}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+                          Checked In
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -638,7 +650,7 @@ const EmployeeProfile = () => {
                         : `${leave.startDate} - ${leave.endDate}`}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-slate-700">
-                      {countLeaveDays(leave.startDate, leave.endDate)}
+                      {leave.days}
                     </td>
                     <td className="px-6 py-4">
                       <span

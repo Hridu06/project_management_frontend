@@ -6,6 +6,7 @@ import {
   Clock3,
   LogIn,
   LogOut,
+  PlaneTakeoff,
   Search,
   UserCheck,
   UserX,
@@ -17,8 +18,16 @@ import {
   getAttendanceRecords,
   getTodayAttendance,
 } from "../../services/attendanceService";
+import { expandDateRange, getLeaveRequests } from "../../services/leaveService";
 import { useAuth } from "../../context/AuthContext";
 import type { AttendanceRecord, AttendanceStatus } from "../../types/attendance";
+
+interface LeaveDayRow {
+  key: string;
+  userId: number;
+  userName: string;
+  date: string;
+}
 
 const statusStyles: Record<AttendanceStatus, string> = {
   present: "bg-emerald-50 text-emerald-600",
@@ -39,26 +48,53 @@ const formatTime = (iso: string | null): string => {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
+const todayDateKey = (): string => {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
+
 const Attendance = () => {
   const { user } = useAuth();
   const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
 
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [leaveDays, setLeaveDays] = useState<LeaveDayRow[]>([]);
   const [today, setToday] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [dateFilter, setDateFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState(todayDateKey());
 
   const load = async () => {
-    const [recordList, todayRecord] = await Promise.all([
+    const [recordList, todayRecord, approvedLeaves] = await Promise.all([
       getAttendanceRecords(),
       getTodayAttendance(),
+      getLeaveRequests({ status: "approved" }),
     ]);
 
     setRecords(recordList);
     setToday(todayRecord);
+
+    // Approved leave overlays the attendance table as "On Leave" rows for
+    // every day it covers — but only where there isn't already a real
+    // check-in that day (an actual check-in always wins).
+    const attendanceKeys = new Set(
+      recordList.filter((record) => record.user).map((record) => `${record.user!.id}__${record.date}`),
+    );
+
+    const rows: LeaveDayRow[] = [];
+    for (const leave of approvedLeaves) {
+      if (!leave.user) continue;
+      for (const date of expandDateRange(leave.startDate, leave.endDate)) {
+        const key = `${leave.user.id}__${date}`;
+        if (attendanceKeys.has(key)) continue;
+        rows.push({ key, userId: leave.user.id, userName: leave.user.name, date });
+      }
+    }
+    setLeaveDays(rows);
+
     setLoading(false);
   };
 
@@ -87,10 +123,14 @@ const Attendance = () => {
   };
 
   const availableDates = useMemo(() => {
-    return [...new Set(records.map((record) => record.date))].sort(
-      (a, b) => b.localeCompare(a),
-    );
-  }, [records]);
+    return [
+      ...new Set([
+        todayDateKey(),
+        ...records.map((record) => record.date),
+        ...leaveDays.map((row) => row.date),
+      ]),
+    ].sort((a, b) => b.localeCompare(a));
+  }, [records, leaveDays]);
 
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -105,15 +145,42 @@ const Attendance = () => {
     });
   }, [records, search, dateFilter]);
 
+  const filteredLeaveDays = useMemo(() => {
+    const term = search.trim().toLowerCase();
+
+    return leaveDays.filter((row) => {
+      const matchesDate = dateFilter === "all" || row.date === dateFilter;
+      const matchesSearch = !term || row.userName.toLowerCase().includes(term);
+      return matchesDate && matchesSearch;
+    });
+  }, [leaveDays, search, dateFilter]);
+
+  // Rows rendered in the table: real check-ins plus synthetic "On Leave"
+  // rows, merged and sorted together by date.
+  const combinedRows = useMemo(() => {
+    type Row =
+      | { kind: "attendance"; date: string; record: AttendanceRecord }
+      | { kind: "leave"; date: string; row: LeaveDayRow };
+
+    const rows: Row[] = [
+      ...filteredRecords.map((record) => ({ kind: "attendance" as const, date: record.date, record })),
+      ...filteredLeaveDays.map((row) => ({ kind: "leave" as const, date: row.date, row })),
+    ];
+
+    return rows.sort((a, b) => b.date.localeCompare(a.date));
+  }, [filteredRecords, filteredLeaveDays]);
+
   const summary = useMemo(() => {
-    return filteredRecords.reduce(
+    const counts = filteredRecords.reduce(
       (acc, record) => {
         if (record.status) acc[record.status] += 1;
         return acc;
       },
       { present: 0, late: 0, "half-day": 0, absent: 0 } as Record<AttendanceStatus, number>,
     );
-  }, [filteredRecords]);
+
+    return { ...counts, onLeave: filteredLeaveDays.length };
+  }, [filteredRecords, filteredLeaveDays]);
 
   return (
     <div className="space-y-6">
@@ -165,7 +232,7 @@ const Attendance = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between">
             <div>
@@ -218,6 +285,20 @@ const Attendance = () => {
             </div>
             <div className="rounded-lg bg-red-50 p-2.5 text-red-600">
               <UserX size={22} />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">On Leave</p>
+              <p className="mt-2 text-2xl font-bold text-slate-900">
+                {summary.onLeave}
+              </p>
+            </div>
+            <div className="rounded-lg bg-violet-50 p-2.5 text-violet-600">
+              <PlaneTakeoff size={22} />
             </div>
           </div>
         </div>
@@ -290,26 +371,24 @@ const Attendance = () => {
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Status
                 </th>
-                {isAdminOrManager && (
-                  <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
-                )}
+                <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td colSpan={isAdminOrManager ? 8 : 7} className="px-6 py-10 text-center text-sm text-slate-400">
                     Loading attendance...
                   </td>
                 </tr>
               )}
 
-              {!loading && filteredRecords.length === 0 && (
+              {!loading && combinedRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-14">
+                  <td colSpan={isAdminOrManager ? 8 : 7} className="px-6 py-14">
                     <div className="flex flex-col items-center gap-2 text-center">
                       <CalendarCheck size={22} className="text-slate-300" />
                       <p className="text-sm font-medium text-slate-500">
@@ -321,79 +400,121 @@ const Attendance = () => {
               )}
 
               {!loading &&
-                filteredRecords.map((record) => (
-                  <tr
-                    key={record.id}
-                    className="border-b border-slate-100 last:border-0"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
-                          {(record.user?.name ?? "?").charAt(0).toUpperCase()}
-                        </div>
+                combinedRows.map((row) => {
+                  if (row.kind === "leave") {
+                    const { row: leave } = row;
+                    return (
+                      <tr key={leave.key} className="border-b border-slate-100 bg-violet-50/30 last:border-0">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-sm font-semibold text-violet-600">
+                              {leave.userName.charAt(0).toUpperCase()}
+                            </div>
+                            <p className="text-sm font-medium text-slate-800">{leave.userName}</p>
+                          </div>
+                        </td>
 
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">
-                            {record.user?.name ?? "Unknown"}
-                          </p>
-                          {record.user?.department && (
-                            <p className="text-xs text-slate-400">
-                              {record.user.department}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
+                        {isAdminOrManager && <td className="px-6 py-4" />}
 
-                    {isAdminOrManager && (
+                        <td className="px-6 py-4 text-sm text-slate-600">{leave.date}</td>
+                        <td className="px-6 py-4 text-sm text-slate-400">-</td>
+                        <td className="px-6 py-4 text-sm text-slate-400">-</td>
+                        <td className="px-6 py-4 text-sm text-slate-400">-</td>
+
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-600">
+                            <PlaneTakeoff size={12} />
+                            On Leave
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4 text-right">
+                          <Link
+                            to={`/app/attendance/${leave.userId}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                            aria-label={`View calendar for ${leave.userName}`}
+                          >
+                            <CalendarDays size={16} />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  const { record } = row;
+
+                  return (
+                    <tr
+                      key={record.id}
+                      className="border-b border-slate-100 last:border-0"
+                    >
                       <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-1.5">
-                          {(record.user?.teams ?? []).length === 0 && (
-                            <span className="text-sm text-slate-400">-</span>
-                          )}
-                          {record.user?.teams.map((team) => (
-                            <span
-                              key={team}
-                              className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-                            >
-                              {team}
-                            </span>
-                          ))}
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                            {(record.user?.name ?? "?").charAt(0).toUpperCase()}
+                          </div>
+
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">
+                              {record.user?.name ?? "Unknown"}
+                            </p>
+                            {record.user?.department && (
+                              <p className="text-xs text-slate-400">
+                                {record.user.department}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </td>
-                    )}
 
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {record.date}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {formatTime(record.checkInAt)}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {formatTime(record.checkOutAt)}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-medium text-slate-700">
-                      {formatDuration(record.totalMinutes)}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      {record.status ? (
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[record.status]}`}
-                        >
-                          {statusLabels[record.status]}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
-                          Checked In
-                        </span>
+                      {isAdminOrManager && (
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-1.5">
+                            {(record.user?.teams ?? []).length === 0 && (
+                              <span className="text-sm text-slate-400">-</span>
+                            )}
+                            {record.user?.teams.map((team) => (
+                              <span
+                                key={team}
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
+                              >
+                                {team}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
                       )}
-                    </td>
 
-                    {isAdminOrManager && (
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {record.date}
+                      </td>
+
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {formatTime(record.checkInAt)}
+                      </td>
+
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {formatTime(record.checkOutAt)}
+                      </td>
+
+                      <td className="px-6 py-4 text-sm font-medium text-slate-700">
+                        {formatDuration(record.totalMinutes)}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {record.status ? (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[record.status]}`}
+                          >
+                            {statusLabels[record.status]}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+                            Checked In
+                          </span>
+                        )}
+                      </td>
+
                       <td className="px-6 py-4 text-right">
                         {record.user && (
                           <Link
@@ -405,9 +526,9 @@ const Attendance = () => {
                           </Link>
                         )}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
