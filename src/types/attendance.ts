@@ -20,11 +20,19 @@ export interface Contribution {
   priority?: ContributionPriority;
 }
 
+export interface AttendanceUserRef {
+  id: number;
+  name: string;
+  department: string | null;
+  teams: string[];
+}
+
 export interface AttendanceRecord {
-  employeeId: string;
+  id: number;
+  user: AttendanceUserRef | null;
   date: string;
-  totalMinutes: number;
-  status: AttendanceStatus;
-  projectIds: string[];
-  contributions: Contribution[];
+  checkInAt: string;
+  checkOutAt: string | null;
+  totalMinutes: number | null;
+  status: AttendanceStatus | null;
 }

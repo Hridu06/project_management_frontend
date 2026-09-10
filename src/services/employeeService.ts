@@ -12,6 +12,7 @@ interface ApiEmployee {
   designation: { id: number; name: string } | null;
   role: UserRole | null;
   has_user_account: boolean;
+  user_id: number | null;
   joining_date: string | null;
   status: Employee["status"];
   is_manager: boolean;
@@ -52,6 +53,7 @@ const toEmployee = (data: ApiEmployee): Employee => ({
   status: data.status,
   isManager: data.is_manager,
   hasUserAccount: data.has_user_account,
+  userId: data.user_id,
 });
 
 const toFormData = (input: EmployeeFormInput): FormData => {

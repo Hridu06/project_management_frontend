@@ -17,6 +17,7 @@ export interface Employee {
   status: EmployeeStatus;
   isManager: boolean;
   hasUserAccount: boolean;
+  userId: number | null;
 }
 
 export interface EmployeeFormInput {

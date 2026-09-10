@@ -1,25 +1,43 @@
+import { apiRequest } from "./api";
+
 export interface AttendanceThresholds {
   presentHours: number;
   halfDayHours: number;
   officeStartTime: string;
 }
 
-let thresholds: AttendanceThresholds = {
-  presentHours: 6,
-  halfDayHours: 3,
-  officeStartTime: "09:30",
+interface ApiAttendanceThresholds {
+  present_hours: number;
+  half_day_hours: number;
+  office_start_time: string;
+}
+
+interface AttendanceSettingsResponse {
+  settings: ApiAttendanceThresholds;
+}
+
+const toThresholds = (data: ApiAttendanceThresholds): AttendanceThresholds => ({
+  presentHours: data.present_hours,
+  halfDayHours: data.half_day_hours,
+  officeStartTime: data.office_start_time,
+});
+
+export const getAttendanceThresholds = async (): Promise<AttendanceThresholds> => {
+  const data = await apiRequest<AttendanceSettingsResponse>("/attendance-settings");
+  return toThresholds(data.settings);
 };
 
-const delay = <T,>(data: T): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(data), 250));
-
-export const getAttendanceThresholds = (): Promise<AttendanceThresholds> => {
-  return delay({ ...thresholds });
-};
-
-export const updateAttendanceThresholds = (
+export const updateAttendanceThresholds = async (
   input: AttendanceThresholds,
 ): Promise<AttendanceThresholds> => {
-  thresholds = { ...input };
-  return delay({ ...thresholds });
+  const data = await apiRequest<AttendanceSettingsResponse>("/attendance-settings", {
+    method: "PUT",
+    body: {
+      present_hours: input.presentHours,
+      half_day_hours: input.halfDayHours,
+      office_start_time: input.officeStartTime,
+    },
+  });
+
+  return toThresholds(data.settings);
 };

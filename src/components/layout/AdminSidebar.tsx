@@ -121,7 +121,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { to: "/app/attendance", label: "Attendance", icon: Clock3, roles: ["admin"] },
+      { to: "/app/attendance", label: "Attendance", icon: Clock3 },
       { to: "/app/leave", label: "Leave", icon: CalendarDays, roles: ["admin"] },
       { to: "/app/reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
     ],
