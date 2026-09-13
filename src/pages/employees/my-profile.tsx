@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ChangePasswordModal from "../../components/common/ChangePasswordModal";
+import ImagePreviewModal from "../../components/common/ImagePreviewModal";
 import { getMyProfile, updateMyProfile } from "../../services/employeeService";
 import { getProjects } from "../../services/projectService";
 import { getTasks } from "../../services/taskService";
@@ -48,6 +49,7 @@ const EmployeeMyProfile = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -176,11 +178,17 @@ const EmployeeMyProfile = () => {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div className="flex items-start gap-4">
             {avatarPreview || employee.avatar ? (
-              <img
-                src={avatarPreview ?? employee.avatar ?? undefined}
-                alt={employee.name}
-                className="h-14 w-14 shrink-0 rounded-full object-cover"
-              />
+              <button
+                type="button"
+                onClick={() => setZoomImage(avatarPreview ?? employee.avatar)}
+                className="shrink-0 rounded-full"
+              >
+                <img
+                  src={avatarPreview ?? employee.avatar ?? undefined}
+                  alt={employee.name}
+                  className="h-14 w-14 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-90"
+                />
+              </button>
             ) : (
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-50 text-lg font-semibold text-blue-600">
                 {initials}
@@ -434,6 +442,12 @@ const EmployeeMyProfile = () => {
       <ChangePasswordModal
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}
+      />
+
+      <ImagePreviewModal
+        src={zoomImage}
+        alt={employee.name}
+        onClose={() => setZoomImage(null)}
       />
     </div>
   );

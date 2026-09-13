@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Pencil, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 import Modal from "../../components/common/Modal";
+import ImagePreviewModal from "../../components/common/ImagePreviewModal";
 import {
   createEmployee,
   deleteEmployee,
@@ -54,6 +55,7 @@ const Managers = () => {
   const [form, setForm] = useState<EmployeeFormInput>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const buildRows = (employeeList: Employee[], managerUsers: Awaited<ReturnType<typeof getUsers>>): ManagerRow[] => {
     const managerUserByEmployeeId = new Map(
@@ -307,11 +309,17 @@ const Managers = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {manager.avatar ? (
-                          <img
-                            src={manager.avatar}
-                            alt={manager.name}
-                            className="h-9 w-9 shrink-0 rounded-full object-cover"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(manager.avatar)}
+                            className="shrink-0 rounded-full"
+                          >
+                            <img
+                              src={manager.avatar}
+                              alt={manager.name}
+                              className="h-9 w-9 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-90"
+                            />
+                          </button>
                         ) : (
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
                             {manager.name.charAt(0).toUpperCase()}
@@ -598,6 +606,12 @@ const Managers = () => {
           </div>
         </form>
       </Modal>
+
+      <ImagePreviewModal
+        src={previewImage}
+        alt="Manager avatar"
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 };
