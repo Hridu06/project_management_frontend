@@ -190,11 +190,32 @@ export const contributeTask = async (input: ContributionFormInput): Promise<Task
       project_id: input.projectId,
       title: input.title,
       description: input.description || null,
+      date: input.date,
     },
   });
 
   return toTask(data.task);
 };
+
+export const updateContribution = async (
+  id: number,
+  input: ContributionFormInput,
+): Promise<Task> => {
+  const data = await apiRequest<TaskResponse>(`/tasks/${id}/contribute`, {
+    method: "PUT",
+    body: {
+      project_id: input.projectId,
+      title: input.title,
+      description: input.description || null,
+      date: input.date,
+    },
+  });
+
+  return toTask(data.task);
+};
+
+export const deleteContribution = (id: number): Promise<void> =>
+  apiRequest(`/tasks/${id}/contribute`, { method: "DELETE" });
 
 export const toggleSubtask = async (taskId: number, subtaskId: number): Promise<Task> => {
   const data = await apiRequest<TaskResponse>(

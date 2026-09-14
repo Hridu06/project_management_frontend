@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ClipboardList, Plus, Printer, Search } from "lucide-react";
-import { contributeTask, getTasks } from "../../services/taskService";
+import { ClipboardList, Pencil, Plus, Printer, Search, Trash2 } from "lucide-react";
+import {
+  contributeTask,
+  deleteContribution,
+  getTasks,
+  updateContribution,
+} from "../../services/taskService";
 import { getProjects } from "../../services/projectService";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../../components/common/Modal";
@@ -255,7 +260,12 @@ const printStyles = `
 // Employees only ever see their own contributions — getTasks() is already
 // scoped to the signed-in user on the backend for this role, so there's no
 // employee picker here (unlike the admin/manager Contributions page).
-const emptyContributionForm = { projectId: 0, title: "", description: "" };
+const emptyContributionForm = {
+  projectId: 0,
+  title: "",
+  description: "",
+  date: new Date().toISOString().slice(0, 10),
+};
 
 const EmployeeContributions = () => {
   const { user } = useAuth();
@@ -273,6 +283,7 @@ const EmployeeContributions = () => {
   const [addForm, setAddForm] = useState(emptyContributionForm);
   const [addError, setAddError] = useState<string | null>(null);
   const [submittingContribution, setSubmittingContribution] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -285,10 +296,42 @@ const EmployeeContributions = () => {
     load();
   }, []);
 
+  // A self-reported contribution can only be edited/deleted by the employee
+  // who logged it, and only while it's still awaiting review — matches the
+  // authorization enforced server-side in TaskController::authorizeContributionOwner.
+  const isEditableContribution = (task: Task) =>
+    task.status === "submitted" &&
+    task.createdBy?.id === user?.id &&
+    task.assignedTo?.id === user?.id;
+
   const openAddModal = () => {
-    setAddForm(emptyContributionForm);
+    setEditingTaskId(null);
+    setAddForm({ ...emptyContributionForm, date: new Date().toISOString().slice(0, 10) });
     setAddError(null);
     setAddModalOpen(true);
+  };
+
+  const openEditModal = (task: Task) => {
+    setEditingTaskId(task.id);
+    setAddForm({
+      projectId: task.projectId ?? 0,
+      title: task.title,
+      description: task.description,
+      date: task.dueDate ?? new Date().toISOString().slice(0, 10),
+    });
+    setAddError(null);
+    setAddModalOpen(true);
+  };
+
+  const handleDeleteContribution = async (task: Task) => {
+    const confirmed = window.confirm(
+      `Delete "${task.title}"? This cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    await deleteContribution(task.id);
+    setTasks((prev) => prev.filter((item) => item.id !== task.id));
   };
 
   const handleAddContribution = async (event: FormEvent) => {
@@ -298,15 +341,30 @@ const EmployeeContributions = () => {
       return;
     }
 
+    if (!addForm.date) {
+      setAddError("Please select a date.");
+      return;
+    }
+
     setSubmittingContribution(true);
     setAddError(null);
     try {
-      const created = await contributeTask({
+      const payload = {
         projectId: addForm.projectId,
         title: addForm.title,
         description: addForm.description,
-      });
-      setTasks((prev) => [created, ...prev]);
+        date: addForm.date,
+      };
+
+      const saved = editingTaskId
+        ? await updateContribution(editingTaskId, payload)
+        : await contributeTask(payload);
+
+      setTasks((prev) =>
+        editingTaskId
+          ? prev.map((item) => (item.id === saved.id ? saved : item))
+          : [saved, ...prev],
+      );
       setAddModalOpen(false);
     } catch (err) {
       setAddError(err instanceof Error ? err.message : "Failed to submit contribution.");
@@ -531,13 +589,16 @@ const EmployeeContributions = () => {
                 <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Due Date
                 </th>
+                <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-400">
+                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-slate-400">
                     Loading contributions...
                   </td>
                 </tr>
@@ -545,7 +606,7 @@ const EmployeeContributions = () => {
 
               {!loading && filteredTasks.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-14">
+                  <td colSpan={7} className="px-6 py-14">
                     <div className="flex flex-col items-center gap-2 text-center">
                       <ClipboardList size={22} className="text-slate-300" />
                       <p className="text-sm font-medium text-slate-500">
@@ -603,6 +664,31 @@ const EmployeeContributions = () => {
 
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {task.dueDate ?? "-"}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {isEditableContribution(task) ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(task)}
+                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                            aria-label="Edit contribution"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteContribution(task)}
+                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                            aria-label="Delete contribution"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-300">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -664,7 +750,11 @@ const EmployeeContributions = () => {
       )}
       </div>
 
-      <Modal open={addModalOpen} onClose={() => setAddModalOpen(false)} title="Add Contribution">
+      <Modal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        title={editingTaskId ? "Edit Contribution" : "Add Contribution"}
+      >
         <form className="space-y-4" onSubmit={handleAddContribution}>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -685,6 +775,22 @@ const EmployeeContributions = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              value={addForm.date}
+              onChange={(event) =>
+                setAddForm((prev) => ({ ...prev, date: event.target.value }))
+              }
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
           </div>
 
           <div>
@@ -719,8 +825,9 @@ const EmployeeContributions = () => {
           </div>
 
           <p className="text-xs text-slate-400">
-            This will be submitted straight to your manager/admin for review — no need to
-            start/submit it manually.
+            {editingTaskId
+              ? "You can only edit this while it's still waiting for review."
+              : "This will be submitted straight to your manager/admin for review — no need to start/submit it manually."}
           </p>
 
           {addError && <p className="text-sm text-red-600">{addError}</p>}
@@ -739,7 +846,11 @@ const EmployeeContributions = () => {
               disabled={submittingContribution}
               className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
             >
-              {submittingContribution ? "Submitting..." : "Submit for Review"}
+              {submittingContribution
+                ? "Saving..."
+                : editingTaskId
+                  ? "Save Changes"
+                  : "Submit for Review"}
             </button>
           </div>
         </form>

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Briefcase,
   Building2,
   Calendar,
+  Camera,
   Check,
   CheckCircle2,
   FolderKanban,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Phone,
   PlaneTakeoff,
+  Printer,
   ShieldCheck,
   UserCircle,
   X,
@@ -25,6 +27,7 @@ import { getProjects } from "../../services/projectService";
 import { getTasks } from "../../services/taskService";
 import { getLeaveRequests } from "../../services/leaveService";
 import type { Employee } from "../../types/employee";
+import type { Project } from "../../types/project";
 import type { UserRole } from "../../types/user";
 
 const roleLabels: Record<UserRole, string> = {
@@ -33,11 +36,175 @@ const roleLabels: Record<UserRole, string> = {
   employee: "Employee",
 };
 
+// CV-style print styles for the printable profile view — mirrors the
+// admin-facing employee profile print view (pages/employees/profile.tsx)
+// so an employee's own printed profile looks the same.
+const printStyles = `
+  @media print {
+    body {
+      background: white !important;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+
+    .cv-page {
+      color: #0f172a !important;
+    }
+
+    .cv-header {
+      display: flex !important;
+      align-items: center !important;
+      gap: 18px !important;
+      padding-bottom: 16px !important;
+      border-bottom: 3px solid #2563eb !important;
+      margin-bottom: 18px !important;
+    }
+
+    .cv-avatar {
+      width: 72px !important;
+      height: 72px !important;
+      border-radius: 999px !important;
+      object-fit: cover !important;
+      border: 2px solid #e2e8f0 !important;
+    }
+
+    .cv-avatar-fallback {
+      width: 72px !important;
+      height: 72px !important;
+      border-radius: 999px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: #dbeafe !important;
+      color: #2563eb !important;
+      font-size: 26px !important;
+      font-weight: 700 !important;
+    }
+
+    .cv-name {
+      font-size: 22px !important;
+      font-weight: 700 !important;
+      margin: 0 !important;
+      color: #0f172a !important;
+    }
+
+    .cv-role {
+      font-size: 13px !important;
+      color: #475569 !important;
+      margin: 3px 0 0 0 !important;
+    }
+
+    .cv-contact {
+      margin-top: 6px !important;
+      display: flex !important;
+      gap: 14px !important;
+      font-size: 11px !important;
+      color: #64748b !important;
+    }
+
+    .cv-status {
+      margin-left: auto !important;
+      align-self: flex-start !important;
+      font-size: 10px !important;
+      font-weight: 600 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.4px !important;
+      padding: 4px 10px !important;
+      border-radius: 999px !important;
+      background: #d1fae5 !important;
+      color: #065f46 !important;
+    }
+
+    .cv-status.inactive {
+      background: #f1f5f9 !important;
+      color: #64748b !important;
+    }
+
+    .cv-section {
+      margin-bottom: 16px !important;
+      page-break-inside: avoid !important;
+    }
+
+    .cv-section-title {
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.6px !important;
+      color: #2563eb !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+      padding-bottom: 5px !important;
+      margin-bottom: 10px !important;
+    }
+
+    .cv-grid {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 10px 24px !important;
+    }
+
+    .cv-field .label {
+      display: block !important;
+      color: #94a3b8 !important;
+      font-size: 9px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.4px !important;
+      margin-bottom: 2px !important;
+    }
+
+    .cv-field .value {
+      display: block !important;
+      color: #0f172a !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+    }
+
+    .cv-project-list {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 11px !important;
+    }
+
+    .cv-project-list th {
+      text-align: left !important;
+      color: #94a3b8 !important;
+      font-size: 9px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.4px !important;
+      padding: 4px 8px !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+    }
+
+    .cv-project-list td {
+      padding: 6px 8px !important;
+      border-bottom: 1px solid #f1f5f9 !important;
+      color: #1e293b !important;
+    }
+
+    .cv-empty {
+      font-size: 11px !important;
+      color: #94a3b8 !important;
+      font-style: italic !important;
+    }
+
+    .cv-footer {
+      margin-top: 20px !important;
+      padding-top: 10px !important;
+      border-top: 1px solid #e2e8f0 !important;
+      font-size: 9px !important;
+      color: #94a3b8 !important;
+      text-align: center !important;
+    }
+
+    @page {
+      margin: 14mm 16mm !important;
+    }
+  }
+`;
+
 const EmployeeMyProfile = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const [employee, setEmployee] = useState<Employee | null>(null);
-  const [assignedProjectCount, setAssignedProjectCount] = useState(0);
+  const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
   const [taskSummary, setTaskSummary] = useState({ total: 0, completed: 0 });
   const [approvedLeaveDays, setApprovedLeaveDays] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -50,6 +217,7 @@ const EmployeeMyProfile = () => {
   const [error, setError] = useState<string | null>(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -74,10 +242,10 @@ const EmployeeMyProfile = () => {
       if (profile) {
         setForm({ name: profile.name, email: profile.email, phone: profile.phone });
 
-        setAssignedProjectCount(
+        setAssignedProjects(
           projects.filter((project) =>
             project.members.some((member) => member.email === profile.email),
-          ).length,
+          ),
         );
 
         // getLeaveRequests() is already scoped server-side to the
@@ -132,6 +300,7 @@ const EmployeeMyProfile = () => {
       setEmployee(updated);
       setAvatarFile(null);
       setEditing(false);
+      await refreshUser();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update profile");
     } finally {
@@ -143,6 +312,23 @@ const EmployeeMyProfile = () => {
     () => (employee?.name || user?.name || "?").charAt(0).toUpperCase(),
     [employee, user],
   );
+
+  const handlePrint = () => {
+    if (!employee) return;
+
+    const originalTitle = document.title;
+    const fileName = `${employee.name.trim().replace(/\s+/g, "_")}_Profile`;
+
+    document.title = fileName;
+
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+    window.addEventListener("afterprint", restoreTitle);
+
+    window.print();
+  };
 
   if (loading) {
     return (
@@ -164,36 +350,86 @@ const EmployeeMyProfile = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {/* Print Styles */}
+      <style>{printStyles}</style>
+
+      <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">My Profile</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          View your details and keep your contact info up to date
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">My Profile</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            View your details and keep your contact info up to date
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handlePrint}
+          className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          <Printer size={16} />
+          Print
+        </button>
       </div>
 
       {/* Header Card */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 print:hidden">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div className="flex items-start gap-4">
-            {avatarPreview || employee.avatar ? (
-              <button
-                type="button"
-                onClick={() => setZoomImage(avatarPreview ?? employee.avatar)}
-                className="shrink-0 rounded-full"
-              >
-                <img
-                  src={avatarPreview ?? employee.avatar ?? undefined}
-                  alt={employee.name}
-                  className="h-14 w-14 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-90"
-                />
-              </button>
-            ) : (
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-50 text-lg font-semibold text-blue-600">
-                {initials}
-              </div>
-            )}
+            <div className="relative shrink-0">
+              {editing ? (
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="group relative block h-14 w-14 rounded-full"
+                  aria-label="Change photo"
+                >
+                  {avatarPreview || employee.avatar ? (
+                    <img
+                      src={avatarPreview ?? employee.avatar ?? undefined}
+                      alt={employee.name}
+                      className="h-14 w-14 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-lg font-semibold text-blue-600">
+                      {initials}
+                    </div>
+                  )}
+                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/0 text-white opacity-0 transition-all group-hover:bg-slate-900/40 group-hover:opacity-100">
+                    <Camera size={16} />
+                  </span>
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white ring-2 ring-white">
+                    <Camera size={11} />
+                  </span>
+                </button>
+              ) : avatarPreview || employee.avatar ? (
+                <button
+                  type="button"
+                  onClick={() => setZoomImage(avatarPreview ?? employee.avatar)}
+                  className="block h-14 w-14 rounded-full"
+                >
+                  <img
+                    src={avatarPreview ?? employee.avatar ?? undefined}
+                    alt={employee.name}
+                    className="h-14 w-14 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-90"
+                  />
+                </button>
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-lg font-semibold text-blue-600">
+                  {initials}
+                </div>
+              )}
+
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
+              />
+            </div>
 
             <div>
               <h2 className="text-xl font-bold text-slate-900">{employee.name}</h2>
@@ -222,7 +458,7 @@ const EmployeeMyProfile = () => {
           <StatCard
             icon={<FolderKanban size={18} className="text-violet-500" />}
             label="Projects"
-            value={String(assignedProjectCount)}
+            value={String(assignedProjects.length)}
             bg="bg-violet-50"
           />
           <StatCard
@@ -246,7 +482,7 @@ const EmployeeMyProfile = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 print:hidden">
         {/* Personal Info (editable) */}
         <div className="rounded-xl border border-slate-200 bg-white p-6">
           <div className="flex items-center justify-between">
@@ -318,17 +554,9 @@ const EmployeeMyProfile = () => {
                 />
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Avatar
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setAvatarFile(event.target.files?.[0] ?? null)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 outline-none transition file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
+              <p className="text-xs text-slate-400">
+                Tip: click your photo above to change it.
+              </p>
 
               {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -439,6 +667,112 @@ const EmployeeMyProfile = () => {
         </div>
       </div>
 
+      {/* Print-only CV */}
+      <div className="hidden print:block cv-page">
+        <div className="cv-header">
+          {employee.avatar ? (
+            <img src={employee.avatar} alt={employee.name} className="cv-avatar" />
+          ) : (
+            <div className="cv-avatar-fallback">{initials}</div>
+          )}
+
+          <div>
+            <h1 className="cv-name">{employee.name}</h1>
+            <p className="cv-role">
+              {employee.designation} · {employee.department}
+            </p>
+            <div className="cv-contact">
+              <span>{employee.email}</span>
+              <span>{employee.phone || "Not provided"}</span>
+            </div>
+          </div>
+
+          <span className={`cv-status ${employee.status === "active" ? "" : "inactive"}`}>
+            {employee.status === "active" ? "Active" : "Inactive"}
+          </span>
+        </div>
+
+        <div className="cv-section">
+          <h2 className="cv-section-title">Personal Info</h2>
+          <div className="cv-grid">
+            <div className="cv-field">
+              <span className="label">Full Name</span>
+              <span className="value">{employee.name}</span>
+            </div>
+            <div className="cv-field">
+              <span className="label">Email</span>
+              <span className="value">{employee.email}</span>
+            </div>
+            <div className="cv-field">
+              <span className="label">Phone</span>
+              <span className="value">{employee.phone || "Not provided"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="cv-section">
+          <h2 className="cv-section-title">Work Info</h2>
+          <div className="cv-grid">
+            <div className="cv-field">
+              <span className="label">Department</span>
+              <span className="value">{employee.department}</span>
+            </div>
+            <div className="cv-field">
+              <span className="label">Designation</span>
+              <span className="value">{employee.designation}</span>
+            </div>
+            <div className="cv-field">
+              <span className="label">Role</span>
+              <span className="value">{roleLabels[employee.role]}</span>
+            </div>
+            <div className="cv-field">
+              <span className="label">Joining Date</span>
+              <span className="value">{employee.joinDate || "—"}</span>
+            </div>
+            <div className="cv-field">
+              <span className="label">Status</span>
+              <span className="value">
+                {employee.status === "active" ? "Active" : "Inactive"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="cv-section">
+          <h2 className="cv-section-title">Projects</h2>
+          {assignedProjects.length === 0 ? (
+            <p className="cv-empty">Not assigned to any project yet.</p>
+          ) : (
+            <table className="cv-project-list">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assignedProjects.map((project) => (
+                  <tr key={project.id}>
+                    <td>{project.name}</td>
+                    <td>{project.status.replace("-", " ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="cv-footer">
+          Generated on{" "}
+          {new Date().toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}{" "}
+          — Project Management System
+        </div>
+      </div>
+
       <ChangePasswordModal
         open={passwordModalOpen}
         onClose={() => setPasswordModalOpen(false)}
@@ -449,7 +783,8 @@ const EmployeeMyProfile = () => {
         alt={employee.name}
         onClose={() => setZoomImage(null)}
       />
-    </div>
+      </div>
+    </>
   );
 };
 

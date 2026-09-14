@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Eye, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import Modal from "../../components/common/Modal";
+import ImagePreviewModal from "../../components/common/ImagePreviewModal";
 import {
   createEmployee,
   deleteEmployee,
@@ -45,6 +46,7 @@ const Employees = () => {
   const [form, setForm] = useState<EmployeeFormInput>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -237,9 +239,23 @@ const Employees = () => {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
-                          {employee.name.charAt(0).toUpperCase()}
-                        </div>
+                        {employee.avatar ? (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(employee.avatar)}
+                            className="shrink-0 rounded-full"
+                          >
+                            <img
+                              src={employee.avatar}
+                              alt={employee.name}
+                              className="h-9 w-9 cursor-pointer rounded-full object-cover transition-opacity hover:opacity-90"
+                            />
+                          </button>
+                        ) : (
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                            {employee.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
 
                         <div>
                           <Link
@@ -521,6 +537,12 @@ const Employees = () => {
           </div>
         </form>
       </Modal>
+
+      <ImagePreviewModal
+        src={previewImage}
+        alt="Employee avatar"
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 };

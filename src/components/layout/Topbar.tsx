@@ -294,9 +294,17 @@ const Topbar = ({ onMenuClick }: TopbarProps) => {
               className="flex items-center gap-1.5 sm:gap-2 md:gap-3 rounded-lg px-1.5 sm:px-2 py-1 transition-colors hover:bg-slate-50"
             >
               {/* Avatar */}
-              <div className="flex h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 items-center justify-center rounded-full bg-blue-600 text-xs sm:text-sm font-semibold text-white flex-shrink-0">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={displayName}
+                  className="h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 flex-shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 items-center justify-center rounded-full bg-blue-600 text-xs sm:text-sm font-semibold text-white flex-shrink-0">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
 
               {/* User Info - Hidden on smaller screens */}
               <div className="hidden sm:block min-w-0">

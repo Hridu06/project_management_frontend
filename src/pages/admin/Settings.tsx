@@ -11,6 +11,8 @@ import {
   Camera,
   Check,
   Clock3,
+  Eye,
+  EyeOff,
   Lock,
   Mail,
   Pencil,
@@ -21,6 +23,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import CategoryManager from "../../components/settings/CategoryManager";
+import { changePassword } from "../../services/authService";
+import { getMyProfile, updateMyProfile } from "../../services/employeeService";
 import {
   getAttendanceThresholds,
   updateAttendanceThresholds,
@@ -48,21 +52,35 @@ const TABS: { id: TabId; label: string; icon: typeof UserCircle }[] = [
 ];
 
 const Settings = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [mobile, setMobile] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const profileSnapshot = useRef({ name, email, mobile, avatarUrl });
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [visiblePassword, setVisiblePassword] = useState({
+    current: false,
+    next: false,
+    confirm: false,
+  });
+
+  const togglePasswordVisible = (field: keyof typeof visiblePassword) => {
+    setVisiblePassword((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
 
   const [presentHours, setPresentHours] = useState(6);
   const [halfDayHours, setHalfDayHours] = useState(3);
@@ -83,8 +101,32 @@ const Settings = () => {
     load();
   }, []);
 
+  useEffect(() => {
+    const load = async () => {
+      const profile = await getMyProfile();
+      if (profile) {
+        setName(profile.name);
+        setEmail(profile.email);
+        setMobile(profile.phone);
+        setAvatarUrl(profile.avatar);
+      }
+      setLoadingProfile(false);
+    };
+
+    load();
+  }, []);
+
+  useEffect(() => {
+    if (!avatarFile) return;
+
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile]);
+
   const startEditProfile = () => {
     profileSnapshot.current = { name, email, mobile, avatarUrl };
+    setProfileError("");
     setIsEditingProfile(true);
   };
 
@@ -94,42 +136,79 @@ const Settings = () => {
     setEmail(snapshot.email);
     setMobile(snapshot.mobile);
     setAvatarUrl(snapshot.avatarUrl);
+    setAvatarFile(null);
+    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setPasswordError("");
+    setProfileError("");
     setIsEditingProfile(false);
   };
 
   const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => setAvatarUrl(reader.result as string);
-    reader.readAsDataURL(file);
+    setAvatarFile(event.target.files?.[0] ?? null);
   };
 
-  const handleProfileSubmit = (event: FormEvent) => {
+  const handleProfileSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    setProfileError("");
+    setPasswordError("");
 
-    if (newPassword || confirmPassword) {
-      if (newPassword.length < 6) {
-        setPasswordError("Password must be at least 6 characters.");
+    const changingPassword = Boolean(currentPassword || newPassword || confirmPassword);
+
+    if (changingPassword) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        setPasswordError("Fill in all three password fields, or leave them all blank.");
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        setPasswordError("New password must be at least 8 characters.");
         return;
       }
 
       if (newPassword !== confirmPassword) {
-        setPasswordError("Passwords do not match.");
+        setPasswordError("New password and confirmation do not match.");
         return;
       }
     }
 
-    setPasswordError("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setIsEditingProfile(false);
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 2500);
+    setSavingProfile(true);
+
+    try {
+      const updated = await updateMyProfile({
+        name,
+        email,
+        phone: mobile,
+        avatarFile,
+      });
+      setName(updated.name);
+      setEmail(updated.email);
+      setMobile(updated.phone);
+      setAvatarUrl(updated.avatar);
+      setAvatarFile(null);
+      await refreshUser();
+
+      if (changingPassword) {
+        await changePassword(currentPassword, newPassword, confirmPassword);
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsEditingProfile(false);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2500);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update profile";
+      if (changingPassword) {
+        setPasswordError(message);
+      } else {
+        setProfileError(message);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleThresholdSubmit = async (event: FormEvent) => {
@@ -184,7 +263,11 @@ const Settings = () => {
 
         <div className="p-6">
           {/* Profile */}
-          {activeTab === "profile" && (
+          {activeTab === "profile" && loadingProfile && (
+            <p className="text-sm text-slate-400">Loading...</p>
+          )}
+
+          {activeTab === "profile" && !loadingProfile && (
             <div>
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-center gap-4">
@@ -316,28 +399,80 @@ const Settings = () => {
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                        Current Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={visiblePassword.current ? "text" : "password"}
+                          autoComplete="current-password"
+                          value={currentPassword}
+                          onChange={(event) => setCurrentPassword(event.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisible("current")}
+                          tabIndex={-1}
+                          aria-label={visiblePassword.current ? "Hide password" : "Show password"}
+                          className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        >
+                          {visiblePassword.current ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div />
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         New Password
                       </label>
-                      <input
-                        type="password"
-                        value={newPassword}
-                        onChange={(event) => setNewPassword(event.target.value)}
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
+                      <div className="relative">
+                        <input
+                          type={visiblePassword.next ? "text" : "password"}
+                          autoComplete="new-password"
+                          minLength={8}
+                          value={newPassword}
+                          onChange={(event) => setNewPassword(event.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisible("next")}
+                          tabIndex={-1}
+                          aria-label={visiblePassword.next ? "Hide password" : "Show password"}
+                          className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        >
+                          {visiblePassword.next ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-slate-700">
                         Confirm Password
                       </label>
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(event) =>
-                          setConfirmPassword(event.target.value)
-                        }
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
+                      <div className="relative">
+                        <input
+                          type={visiblePassword.confirm ? "text" : "password"}
+                          autoComplete="new-password"
+                          minLength={8}
+                          value={confirmPassword}
+                          onChange={(event) =>
+                            setConfirmPassword(event.target.value)
+                          }
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisible("confirm")}
+                          tabIndex={-1}
+                          aria-label={visiblePassword.confirm ? "Hide password" : "Show password"}
+                          className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"
+                        >
+                          {visiblePassword.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -345,13 +480,18 @@ const Settings = () => {
                     <p className="text-sm text-red-600">{passwordError}</p>
                   )}
 
+                  {profileError && (
+                    <p className="text-sm text-red-600">{profileError}</p>
+                  )}
+
                   <div className="flex items-center gap-3 pt-1">
                     <button
                       type="submit"
-                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                      disabled={savingProfile}
+                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                     >
                       <Check size={16} />
-                      Save Changes
+                      {savingProfile ? "Saving..." : "Save Changes"}
                     </button>
 
                     <button
